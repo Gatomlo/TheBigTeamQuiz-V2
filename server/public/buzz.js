@@ -1,4 +1,6 @@
-const socket = io();
+// Prefixe de montage deduit de l'URL de la page : '' en autonome, '/quiz' derriere la passerelle.
+const BASE_PATH = new URL('.', location.href).pathname.replace(/\/$/, '');
+const socket = io({ path: BASE_PATH + '/socket.io' });
 // Re-envoye a CHAQUE connexion (pas juste la premiere) : une reconnexion
 // socket.io (coupure wifi momentanee) obtient un nouveau socket.id cote
 // serveur, qui doit donc se re-annoncer comme "phone" a chaque fois pour

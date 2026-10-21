@@ -57,7 +57,7 @@
     if(!token){
       document.getElementById('error').hidden = false;
     } else {
-      fetch('/api/games/share/' + encodeURIComponent(token))
+      fetch('api/games/share/' + encodeURIComponent(token))
         .then(function(r){ if(!r.ok) throw new Error('not found'); return r.json(); })
         .then(function(game){
           document.getElementById('date').textContent = new Date(game.ended_at).toLocaleString('fr-FR');

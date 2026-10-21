@@ -13,10 +13,8 @@ const app = express();
 // toutes les requetes semblent venir de la meme IP et la limitation de
 // tentatives de connexion ci-dessous bloquerait tout le monde en meme temps.
 app.set('trust proxy', true);
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*' }
-});
+const server = http.createServer(app); // utilise seulement en lancement autonome (voir la fin du fichier)
+let io = null; // Socket.IO est cree par createIo() : sur ce serveur HTTP, ou celui de la passerelle
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -923,6 +921,7 @@ function currentState(includeSecret) {
 }
 
 function broadcastState() {
+  if (!io) return; // pas encore attache a un serveur HTTP
   // Le gestionnaire voit toujours les scores du vote ; display et telephones ne
   // les recoivent que si le vote est "en direct" ou clos (voir publicVote).
   const full = currentState(true);
@@ -933,6 +932,7 @@ function broadcastState() {
   }
 }
 
+function registerSocketHandlers() {
 io.on('connection', (socket) => {
   socket.emit('state', currentState());
 
@@ -1387,6 +1387,7 @@ io.on('connection', (socket) => {
     broadcastState();
   });
 });
+}
 
 function persistFinishedSession() {
   if (!sessionStartedAt || teams.length === 0) return;
@@ -1407,7 +1408,27 @@ function persistFinishedSession() {
   sessionPlayedEpreuveNames = [];
 }
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Buzz server listening on port ${PORT}`);
-});
+// Socket.IO s'attache a un serveur HTTP, pas a une app Express. Deux modes :
+// - autonome (node server.js) : serveur HTTP propre a l'app, chemin /socket.io ;
+// - monte dans la passerelle node-gateway (apps/<nom>/) : la passerelle appelle
+//   attachToServer() avec SON serveur HTTP et le prefixe de montage (ex. /quiz),
+//   Socket.IO ecoute alors sur /quiz/socket.io. Voir README.md ("Passerelle").
+function createIo(httpServer, mountPath) {
+  const prefix = String(mountPath || '').replace(/\/+$/, '');
+  io = new Server(httpServer, { cors: { origin: '*' }, path: prefix + '/socket.io' });
+  registerSocketHandlers();
+}
+
+app.attachToServer = (httpServer, options) => {
+  if (io) return; // deja attache
+  createIo(httpServer, options && options.mountPath);
+};
+module.exports = app;
+
+if (require.main === module) {
+  createIo(server, '');
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => {
+    console.log(`Buzz server listening on port ${PORT}`);
+  });
+}

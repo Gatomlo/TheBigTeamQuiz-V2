@@ -1346,7 +1346,10 @@ function loadBuzzClient(){
   // La librairie client socket.io est chargee en local (socket.io.min.js), pas
   // depuis le serveur de buzz : un chargement de script cross-origin vers ce
   // serveur peut etre bloque par le navigateur/des extensions (constate en test).
-  buzzSocket = io(BUZZ_SERVER_URL);
+  // BUZZ_SERVER_URL peut porter un prefixe (ex. https://hote/quiz derriere la passerelle
+  // node-gateway) : sans ca, io() le prendrait pour un namespace. Origine + chemin explicite.
+  var buzzUrl = new URL(BUZZ_SERVER_URL, location.href);
+  buzzSocket = io(buzzUrl.origin, { path: buzzUrl.pathname.replace(/\/+$/, '') + '/socket.io' });
   buzzSocket.on('connect', function(){
     buzzSocket.emit('register-role', APP_MODE);
     // Seul l'ecran gestionnaire fait autorite sur la liste d'equipes :

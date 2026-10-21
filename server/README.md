@@ -57,6 +57,14 @@ pas plus.
 
    avec l'URL reelle de l'application Node deployee.
 
+## Derriere la passerelle node-gateway (optionnel)
+
+`server.js` exporte l'app Express (`module.exports = app`) et une fonction `app.attachToServer(httpServer, { mountPath })`. La passerelle (https://github.com/Gatomlo/node-gateway, branche `feature/attach-socket` ou apres fusion) l'appelle avec son propre serveur HTTP : Socket.IO ecoute alors sur `<mountPath>/socket.io` (ex. `/quiz/socket.io`). Lance seul (`node server.js`), rien ne change.
+
+1. Deposer ce dossier `server/` (avec `data/`) dans `apps/quiz/` de la passerelle (Node >= 22.5 requis pour `node:sqlite`).
+2. Dans le site statique, regler `window.BUZZ_SERVER_URL = "https://<hote>/quiz"` (ou `?buzz=https://<hote>/quiz`). Le client prend le prefixe pour le chemin Socket.IO, pas pour un namespace.
+3. La page joueur est servie sur `https://<hote>/quiz/`.
+
 ## Donnees
 
 - L'etat de la partie en cours (equipes, scores, manche de buzz, position
