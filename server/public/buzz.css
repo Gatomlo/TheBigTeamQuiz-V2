@@ -1,0 +1,326 @@
+/* Application joueur (telephone) - palette de marque : orange #FF934F / #E0701F,
+   vert #4B967D, fonds parchemin (clair) / cuir (sombre). Suit le theme du systeme. */
+:root {
+  --bg: #F1E4C8; --bg-glow: radial-gradient(90% 40% at 15% -10%, rgba(75,150,125,.16), transparent 60%), radial-gradient(70% 40% at 100% 0%, rgba(255,147,79,.2), transparent 60%);
+  --surface: #fbf3e0; --surface-2: #f5e8cc; --line: #dcc9a3;
+  --fg: #2A1D15; --muted: #6d5b49; --sand: #a64e0c;
+  --teal: #3a7c66; --teal-ink: #ffffff; --teal-soft: rgba(75,150,125,.16);
+  --pa: #F2802F; --pb: #FF934F; --pc: #E0701F;
+  --good: #2f7a5e; --bad: #b8283a; --bad-soft: rgba(184,40,58,.12);
+  --f-display: "Amatic SC", "Segoe UI", sans-serif;
+  --f-body: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1B1410; --bg-glow: radial-gradient(90% 40% at 15% -10%, rgba(75,150,125,.2), transparent 60%), radial-gradient(70% 40% at 100% 0%, rgba(255,147,79,.12), transparent 60%);
+    --surface: #261b15; --surface-2: #30231b; --line: #45342a;
+    --fg: #f3e9d8; --muted: #b9a78f; --sand: #FF934F;
+    --teal: #4B967D; --teal-ink: #05150f; --teal-soft: rgba(75,150,125,.2);
+    --good: #66bb9b; --bad: #f2616d; --bad-soft: rgba(242,97,109,.16);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--f-body);
+  background: var(--bg-glow), var(--bg);
+  background-attachment: fixed;
+  color: var(--fg);
+  min-height: 100vh;
+  color-scheme: light dark;
+}
+
+#app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 24px 16px 96px;
+  text-align: center;
+  position: relative;
+}
+
+h1 {
+  font: 700 2.6rem/1 var(--f-display);
+  letter-spacing: .02em;
+  color: var(--sand);
+  margin: 0 0 22px;
+}
+
+h2 { font: 700 1.9rem/1 var(--f-display); letter-spacing: .02em; margin: 0 0 12px; }
+
+.muted { color: var(--muted); }
+
+.errorText { color: var(--bad); font-weight: 700; }
+
+.smallLink {
+  display: inline-block;
+  margin-top: 16px;
+  color: var(--muted);
+}
+
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+.choiceButton {
+  display: block;
+  width: 100%;
+  font: 700 1.05rem var(--f-body);
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+.choiceButton:active { filter: brightness(0.94); }
+
+.confirmButton {
+  background: linear-gradient(135deg, var(--pb), var(--pc));
+  border-color: transparent;
+  color: #2b1100;
+  box-shadow: 0 12px 26px -14px rgba(224, 112, 31, .8);
+}
+
+.teamNameField {
+  width: 100%;
+  font: 500 1.1rem var(--f-body);
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  margin-top: 10px;
+  background: var(--surface);
+  color: var(--fg);
+}
+
+.teamNameField::placeholder { color: var(--muted); }
+
+#teamList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.teamChoiceButton {
+  font: 700 1.1rem var(--f-body);
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.teamChoiceButton:active { filter: brightness(0.94); }
+
+.teamLine { font-size: 1rem; color: var(--muted); margin: 0; }
+.teamLine strong { color: var(--fg); font: 700 1.9rem/1 var(--f-display); letter-spacing: .02em; display: block; margin-top: 4px; }
+
+.teamChoiceScore { color: var(--muted); font-weight: 500; }
+
+.scoreButton {
+  display: block;
+  margin: 10px auto 0;
+  font: 700 .9rem var(--f-body);
+  color: var(--sand);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 8px 18px;
+  cursor: pointer;
+}
+
+.scoreButton:active { filter: brightness(0.94); }
+
+.questionPrompt { font-size: 1.25rem; font-weight: 700; margin-top: 20px; }
+
+#qcmOptionsList { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+
+.qcmOptionButton {
+  font: 600 1.05rem var(--f-body);
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.qcmOptionButton:disabled { opacity: 0.6; }
+
+.qcmOptionButton.selected { background: linear-gradient(135deg, var(--pb), var(--pc)); border-color: transparent; color: #2b1100; opacity: 1; }
+.qcmOptionButton.correctAnswer { background: var(--good); border-color: transparent; color: #04200f; opacity: 1; }
+.qcmOptionButton.wrongAnswer { background: var(--bad); border-color: transparent; color: #2a0409; opacity: 1; }
+
+/* Buzzer : un grand orbe, l'etat se lit a la couleur et au texte */
+.buzzButton {
+  width: min(100%, 340px);
+  aspect-ratio: 1 / 1;
+  max-height: 55vh;
+  border-radius: 50%;
+  border: 0;
+  font: 700 3.4rem/1 var(--f-display);
+  letter-spacing: .06em;
+  color: #2b1100;
+  margin: 24px auto 0;
+  display: block;
+  transition: transform 0.05s ease-in-out, background .2s;
+  cursor: pointer;
+}
+
+.buzzButton:active:not(:disabled) { transform: scale(0.96); }
+
+.buzzButton.ready {
+  background: radial-gradient(circle at 35% 28%, var(--pb), var(--pc) 70%);
+  box-shadow: 0 0 0 10px rgba(255, 147, 79, .22), 0 24px 50px -18px rgba(224, 112, 31, .85);
+  animation: orbPulse 1.8s ease-in-out infinite;
+}
+
+.buzzButton.waiting {
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 2px dashed var(--line);
+  font-size: 2.4rem;
+  cursor: default;
+}
+
+.buzzButton.buzzed {
+  background: radial-gradient(circle at 35% 28%, #66bb9b, var(--teal) 75%);
+  color: var(--teal-ink);
+  box-shadow: 0 0 0 10px var(--teal-soft);
+}
+
+.buzzButton.excluded {
+  background: var(--bad-soft);
+  color: var(--bad);
+  border: 2px solid var(--bad);
+  font-size: 2.4rem;
+  cursor: default;
+}
+
+@keyframes orbPulse {
+  0%, 100% { box-shadow: 0 0 0 8px rgba(255, 147, 79, .22), 0 24px 50px -18px rgba(224, 112, 31, .85); }
+  50% { box-shadow: 0 0 0 16px rgba(255, 147, 79, .1), 0 24px 50px -18px rgba(224, 112, 31, .85); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .buzzButton.ready { animation: none; }
+}
+
+#buzzStatus { font-size: 1.1rem; margin-top: 18px; min-height: 1.5em; }
+
+.changeTeamBottomLink {
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#createSoundList { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+
+.soundChoiceButton {
+  font: 600 .95rem var(--f-body);
+  padding: 10px 14px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.soundChoiceButton.selected { border-color: var(--teal); background: var(--teal-soft); }
+
+.scoreboardOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 12, 8, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.scoreboardOverlay[hidden] { display: none; }
+
+.scoreboardCard {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 24px;
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+}
+
+.scoreboardRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+  margin-top: 8px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.scoreboardRow.myTeamRow { background: var(--teal-soft); border: 2px solid var(--teal); }
+
+/* Vote de l'epreuve suivante */
+#voteBlock { margin-top: 8px; }
+.voteTimer { font: 700 2.4rem/1 var(--f-display); color: var(--sand); margin: 4px 0 0; min-height: 1em; font-variant-numeric: tabular-nums; }
+#voteOptionsList { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.voteOptionButton {
+  font: 700 1.1rem var(--f-body);
+  padding: 18px 16px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+  transition: transform .05s, border-color .15s, background .15s;
+}
+.voteOptionButton:active:not(:disabled) { transform: scale(.98); }
+.voteOptionButton:disabled { cursor: default; }
+.voteOptionButton.selected { border-color: var(--pb); background: linear-gradient(135deg, var(--pb), var(--pc)); color: #2b1100; }
+.voteOptionButton.winner { border-color: var(--teal); background: var(--teal-soft); opacity: 1; }
+.voteOptionButton.loser { opacity: .45; }
+
+/* Reglages + notification plein ecran */
+.settingsButton {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: max(10px, env(safe-area-inset-right, 0px));
+  z-index: 90;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.settingsRow { display: flex; align-items: flex-start; gap: 12px; text-align: left; padding: 12px; border-radius: 12px; background: var(--surface-2); margin-bottom: 14px; font-weight: 600; cursor: pointer; }
+.settingsRow input { width: 22px; height: 22px; margin-top: 2px; accent-color: var(--teal); flex: none; }
+.settingsRow small { font-weight: 400; }
+.fsToast {
+  position: fixed;
+  left: 16px; right: 16px;
+  bottom: max(48px, calc(env(safe-area-inset-bottom, 0px) + 40px));
+  z-index: 120;
+  max-width: 440px; margin: 0 auto;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--teal);
+  color: var(--teal-ink);
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 12px 30px -12px rgba(0,0,0,.5);
+}
+.fsToast[hidden] { display: none; }

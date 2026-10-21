@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Buzz ! - The Big Team Quiz</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amatic+SC:wght@700&family=Figtree:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="buzz.css">
+</head>
+<body>
+  <button id="settingsButton" class="settingsButton" type="button" aria-label="Réglages" title="Réglages">⚙</button>
+  <div id="app">
+    <h1>The Big Team Quiz</h1>
+
+    <div id="teamPicker">
+      <div id="joinChoice">
+        <p>Comment voulez-vous rejoindre ?</p>
+        <button id="showCreateFormButton" class="choiceButton" type="button">Créer une équipe</button>
+        <button id="showJoinListButton" class="choiceButton" type="button">Rejoindre une équipe existante</button>
+      </div>
+
+      <div id="createForm" hidden>
+        <p>Nom de l'équipe :</p>
+        <input type="text" id="newTeamNameInput" class="teamNameField" placeholder="Nom de l'équipe" maxlength="30">
+        <p class="muted">Son de buzz :</p>
+        <div id="createSoundList"></div>
+        <button id="confirmCreateTeamButton" class="choiceButton confirmButton" type="button">Créer et rejoindre</button>
+        <p id="createTeamError" class="errorText" hidden></p>
+        <a href="#" id="backToChoiceFromCreate" class="smallLink">‹ retour</a>
+      </div>
+
+      <div id="joinList" hidden>
+        <p>Choisissez votre équipe :</p>
+        <div id="teamList"></div>
+        <p id="noTeamsMessage" class="muted" hidden>Aucune équipe pour l'instant, créez la vôtre !</p>
+        <a href="#" id="backToChoiceFromList" class="smallLink">‹ retour</a>
+      </div>
+    </div>
+
+    <div id="buzzScreen" hidden>
+      <p class="teamLine">Équipe : <strong id="currentTeamLabel"></strong></p>
+      <button id="scoreButton" class="scoreButton" type="button"></button>
+
+      <div id="voteBlock" hidden>
+        <p id="voteLead" class="questionPrompt"></p>
+        <p id="voteTimer" class="voteTimer"></p>
+        <div id="voteOptionsList"></div>
+        <p id="voteStatus" class="muted"></p>
+      </div>
+
+      <div id="buzzerAnswerBlock">
+        <button id="buzzButton" class="buzzButton waiting" disabled>BUZZ</button>
+        <p id="buzzStatus" class="muted"></p>
+      </div>
+
+      <div id="qcmAnswerBlock" hidden>
+        <p id="qcmQuestionText" class="questionPrompt"></p>
+        <div id="qcmOptionsList"></div>
+        <p id="qcmStatus" class="muted"></p>
+      </div>
+
+      <div id="directAnswerBlock" hidden>
+        <p id="directQuestionText" class="questionPrompt"></p>
+        <input type="text" id="directAnswerInput" class="teamNameField" placeholder="Votre réponse">
+        <button id="submitDirectAnswerButton" class="choiceButton confirmButton" type="button">Envoyer</button>
+        <p id="directStatus" class="muted"></p>
+      </div>
+
+      <a href="#" id="changeTeamLink" class="changeTeamBottomLink">changer d'équipe</a>
+    </div>
+
+    <div id="settingsOverlay" class="scoreboardOverlay" hidden>
+      <div class="scoreboardCard settingsCard">
+        <h2>Réglages</h2>
+        <label class="settingsRow" for="autoFullscreenInput">
+          <input type="checkbox" id="autoFullscreenInput">
+          <span>Plein écran automatique<br><small id="autoFullscreenHint" class="muted">Activé dès que la partie démarre.</small></span>
+        </label>
+        <button id="closeSettingsButton" type="button" class="choiceButton">Fermer</button>
+      </div>
+    </div>
+
+    <div id="fsToast" class="fsToast" role="status" hidden>Plein écran activé. Vous pouvez le désactiver dans les réglages (⚙).</div>
+
+    <div id="scoreboardOverlay" class="scoreboardOverlay" hidden>
+      <div class="scoreboardCard">
+        <h2>Classement</h2>
+        <div id="scoreboardList"></div>
+        <button id="closeScoreboardButton" type="button" class="choiceButton">Fermer</button>
+      </div>
+    </div>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="buzz.js"></script>
+</body>
+</html>

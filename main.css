@@ -1,0 +1,1652 @@
+:root{
+  --accent: #008c95;
+  --accent-dark: #036b73;
+  --ink: #26323f;
+  --muted: #5b6472;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 2px 6px rgba(0,0,0,0.15);
+  --shadow-md: 0 4px 14px rgba(0,0,0,0.16);
+}
+
+body{
+  background: linear-gradient(160deg, #e7c9a1 0%, #dabd91 45%, #cf9f74 100%);
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  color: var(--ink);
+}
+.mainContainer{
+  margin-top:50px;
+}
+
+/* Repartition des colonnes du gestionnaire : Epreuves = 2/5, les 3 autres
+   colonnes (teams/display/buzzer) = 1/5 chacune. Le systeme de grille
+   Bootstrap (douziemes) ne tombe pas juste sur des cinquiemes, d'ou des
+   pourcentages explicites plutot que des classes col-N. */
+#slidePanel{
+  flex: 0 0 40%;
+  max-width: 40%;
+}
+
+.teamCollect,
+.displayCollect,
+.buzzerCollect{
+  flex: 0 0 20%;
+  max-width: 20%;
+}
+
+/* Sur le display, le panneau principal doit reprendre toute la largeur
+   (les 3 autres colonnes sont masquees) : la regle plus specifique l'emporte
+   sur #slidePanel{flex:0 0 40%} ci-dessus. */
+body.mode-display #slidePanel{
+  flex: 0 0 100%;
+  max-width: 100%;
+}
+
+/* Selecteur de scenario, Lancer, Epreuves et le menu Gerer tiennent tous sur
+   une seule ligne, sous le titre de la colonne. */
+#scenarioBar{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+#scenarioBar select{
+  flex: 1;
+  min-width: 0;
+}
+
+#scenarioBarButtons{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Menu des epreuves masque sur le display : oeil barre plutot qu'un
+   changement de couleur (plus lisible que "actif/inactif" via une teinte). */
+#toggleMenuOnDisplayButton.eyeOff{
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  opacity: 0.7;
+}
+
+#currentQuestionPanel{
+  background: rgba(255,255,255,0.6);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 18px;
+  min-height: 56vh;
+}
+
+.questionMeta{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 10px;
+}
+
+.questionMeta #questionEpreuveName{
+  font-weight: 700;
+  font-size: 1.15em;
+}
+
+.questionHostNote{
+  background: rgba(245,175,0,0.22);
+  border: 1px dashed #d79a10;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 0.9em;
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+.questionText{
+  font-size: 1.6em;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.questionImages{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.questionImages img{
+  max-height: 30vh;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Cote gestionnaire : simples miniatures cliquables (voir #imageLightboxModal)
+   plutot que des images en pleine hauteur, qui repoussaient tout le reste du
+   panneau (statut du buzz, file d'attente, validation...) en bas de page,
+   hors ecran sans defilement. Le display garde ses images en grand
+   (body.mode-display .questionImages img, plus bas). */
+body.mode-control .questionImages img{
+  max-height: 90px;
+  cursor: zoom-in;
+  transition: transform 0.08s ease-in-out;
+}
+
+body.mode-control .questionImages img:hover{
+  transform: scale(1.05);
+}
+
+.imageLightboxContent{
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  align-items: center;
+}
+
+.imageLightboxContent img{
+  max-width: 100%;
+  max-height: 85vh;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+.questionAudioPlaceholder{
+  text-align: center;
+  font-size: 1.8em;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 24px 0;
+}
+
+#questionAudio, #questionVideo{
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+#questionNavButtons{
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+
+.answerRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.6);
+}
+
+.answerRow.answerCorrect{ background: rgba(46,125,50,0.25); }
+.answerRow.answerWrong{ background: rgba(217,4,41,0.18); }
+
+.answerTeamName{ font-weight: 600; flex: 1; }
+.answerValue{ flex: 2; color: var(--muted); }
+
+/* Ecran gestionnaire : le panneau de question n'a pas besoin d'occuper autant
+   de place, ce n'est qu'une reference pour l'animateur (le vrai affichage est
+   ailleurs). Sur l'ecran d'affichage, on l'agrandit pour le public. */
+body.mode-control #currentQuestionPanel{
+  min-height: 56vh;
+}
+
+body.mode-display #currentQuestionPanel{
+  background: transparent;
+  box-shadow: none;
+  padding-top: 90px;
+}
+
+body.mode-display .questionText{
+  font-size: 2.6em;
+  text-align: center;
+}
+
+body.mode-display .questionMeta{
+  font-size: 1.1em;
+  align-items: center;
+  gap: 4px;
+}
+
+body.mode-display .questionImages img{
+  max-height: 50vh;
+}
+
+body.mode-display #questionNavButtons{
+  display: none;
+}
+
+body.mode-display .questionHostNote{
+  display: none !important;
+}
+
+/* File d'attente des buzz + panneau "equipe a la parole" : outils de pilotage
+   pour l'animateur uniquement, jamais visibles sur l'ecran d'affichage (le
+   public suit la banniere/le decompte deja prevus pour le display). */
+body.mode-display #buzzResults,
+body.mode-display #activeTeamPanel{
+  display: none !important;
+}
+
+body.mode-display #epreuvesMenuTitle,
+body.mode-display #slidePanelTitle{
+  display: none;
+}
+
+/* Titre + logo montres uniquement sur le display au-dessus du menu de choix
+   d'epreuve (le gestionnaire garde son propre titre "Epreuves du scenario"). */
+.epreuvesMenuDisplayHeader{
+  display: none;
+}
+
+body.mode-display .epreuvesMenuDisplayHeader{
+  display: block;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+body.mode-display .epreuvesMenuDisplayHeader p{
+  font-size: 2em;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+body.mode-display .answerRow{
+  font-size: 1.4em;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Selecteur par id : .epreuvesList (definie plus bas dans ce fichier avec la
+   meme specificite de classe) ecraserait sinon ce reset selon l'ordre des
+   regles, remettant un scroll fige a 320px meme quand la carte a de la place. */
+#epreuvesMenuList{
+  max-height: none;
+  overflow-y: visible;
+  border: none;
+  padding: 0;
+}
+
+.menuEpreuveRow{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255,255,255,0.6);
+  margin-bottom: 8px;
+}
+
+.menuEpreuveRow.playedEpreuve{
+  opacity: 0.55;
+}
+
+.menuEpreuveName{
+  font-weight: 600;
+}
+
+body.mode-display #epreuvesMenuList{
+  /* Colonnes multiples (flux CSS natif) plutot qu'une longue liste qui force
+     a scroller : tous les noms doivent tenir sur l'ecran d'un coup d'oeil. */
+  max-width: none;
+  margin: 0;
+  columns: 3 260px;
+  column-gap: 24px;
+}
+
+body.mode-display .menuEpreuveRow{
+  font-size: 1.3em;
+  padding: 12px 16px;
+  cursor: default;
+  break-inside: avoid;
+}
+
+.epreuvesList, .questionsList{
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+}
+
+.epreuveRow, .questionRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.epreuveRow:hover{ background: rgba(0,0,0,0.05); }
+.epreuveRow.active{ background: var(--accent); color: #fff; }
+
+.questionRow{ cursor: default; }
+
+.questionForm{
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0,0,0,0.1);
+}
+
+.questionImagesPreview{
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.team{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top:6px;
+  margin-left: 0;
+  margin-right: 0;
+  width:100%;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 1em;
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform 0.08s ease-in-out, box-shadow 0.08s ease-in-out;
+}
+
+.team:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.22);
+}
+
+.pointBadge{
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.addPointButton{
+  margin-right: 20px;
+  width: 50px;
+}
+
+.addPointLine{
+  text-align: center;
+  margin-bottom: 5px;
+}
+
+a {
+  color:var(--accent) !important;
+  font-size: 1em;
+}
+
+#slidePanel,
+.teamCollect,
+.displayCollect,
+.buzzerCollect{
+  padding: 4px 10px;
+}
+
+.columnTitle{
+  font-size: 1.15em;
+  font-weight: 700;
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 4px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--accent);
+}
+
+.teamList{
+  display: flex;
+  flex-direction: column;
+}
+
+.teamNameCell{
+  flex: 1;
+  min-width: 0;
+  padding-right: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teamEditBtn{
+  flex-shrink: 0;
+  cursor: pointer;
+  text-align: center;
+  opacity: 0.85;
+  user-select: none;
+}
+
+.teamEditBtn:hover{
+  opacity: 1;
+}
+
+.palmares{
+  font-size: 1.6em;
+}
+.palmares0{
+  font-size: 2.2em;
+  color:#d79a10;
+}
+.palmares1{
+  font-size: 2em;
+  color:#d79a10;
+}
+.palmares2{
+  font-size: 1.9em;
+  color:#d79a10;
+}
+
+.titlePalmares{
+  border-bottom: 1px solid
+}
+#teamActions{
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.toolbarBtn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  min-width: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.08s ease-in-out;
+}
+
+.toolbarBtn:hover{
+  transform: translateY(-1px);
+}
+
+.toolbarBtnWide{
+  min-width: 70px;
+  font-weight: 600;
+}
+
+.buzzerLinkBlock{
+  margin-bottom: 10px;
+}
+
+.buzzerLinkBlock .buzzQrCode{
+  width: 120px;
+  height: 120px;
+}
+
+.buzzerLinkBlock .buzzQrCode img,
+.buzzerLinkBlock .buzzQrCode canvas{
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.lockButtonsRow .btn{
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  font-size: 0.72em;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ---- File d'attente des buzz (ordre d'arrivee), affichee dans le panneau de
+   la question (gestion de l'epreuve). Volontairement une liste simple (pas un
+   podium 1er/2e/3e : ce n'est pas un classement de score, juste un ordre
+   d'arrivee), sans le temps de reponse. Statut par equipe rendu explicite
+   (icone + couleur) plutot qu'un simple libelle gris. ---- */
+.buzzPodiumPanel{
+  margin-top: 12px;
+}
+
+.buzzQueueList{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.buzzQueueRow{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background-color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  transition: background-color 0.08s ease-in-out;
+}
+
+.buzzQueueRow:hover{
+  background-color: rgba(255,255,255,0.85);
+}
+
+.buzzQueueRank{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.12);
+  font-size: 0.8em;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.buzzQueueName{
+  font-weight: 700;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.buzzQueueStatus{
+  font-size: 0.85em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* A la parole ou deja fautive : plus rien a faire en cliquant dessus (voir le
+   handler JS, qui ignore le clic dans ces deux cas) -> curseur normal. */
+.buzzQueueRow.isSpeaking,
+.buzzQueueRow.isWrong{
+  cursor: default;
+}
+
+/* A la parole : mise en avant nette (contour accent). */
+.buzzQueueRow.isSpeaking{
+  background-color: rgba(0,140,149,0.15);
+  box-shadow: 0 0 0 2px var(--accent) inset;
+}
+
+.buzzQueueRow.isSpeaking:hover{
+  background-color: rgba(0,140,149,0.15);
+}
+
+.buzzQueueRow.isSpeaking .buzzQueueStatus{
+  color: var(--accent);
+}
+
+/* Mauvaise reponse : assombri et barre pour qu'on l'ecarte visuellement au premier coup d'oeil. */
+.buzzQueueRow.isWrong{
+  opacity: 0.55;
+}
+
+.buzzQueueRow.isWrong:hover{
+  background-color: rgba(255,255,255,0.6);
+}
+
+.buzzQueueRow.isWrong .buzzQueueName{
+  text-decoration: line-through;
+}
+
+.buzzQueueRow.isWrong .buzzQueueStatus{
+  color: #7a1f1f;
+}
+
+.buzzQrCode{
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: #fff;
+  border-radius: var(--radius-md);
+}
+
+/* ---- Panneau "equipe a la parole" (cote gestionnaire) : integre dans
+   l'encadre de la question, sous le podium des buzz, plutot qu'en modale
+   plein ecran qui le masquait entierement. ---- */
+.activeTeamPanel{
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: rgba(0,140,149,0.12);
+  border: 2px solid var(--accent);
+  text-align: center;
+}
+
+.activeTeamPanelLabel{
+  font-size: 0.8em;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.activeTeamName{
+  font-size: 1.8em;
+  font-weight: bold;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+/* "Bonne reponse"/"Mauvaise reponse" : largeur deja egale (colonnes w-100),
+   mais "Mauvaise reponse" (plus long) pouvait passer sur 2 lignes et devenir
+   plus haut que l'autre bouton. Hauteur fixe + centrage vertical du texte
+   pour garantir des boutons de dimensions strictement identiques. */
+.activeTeamPanel .row > div{
+  display: flex;
+}
+
+.activeTeamPanel .btn{
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.modal-title{
+  font-weight: 600;
+}
+
+#buzzSettingsAccordion .accordion-button{
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 4px 10px;
+  min-height: 0;
+}
+
+#buzzSettingsAccordion .accordion-button::after{
+  width: 0.9em;
+  height: 0.9em;
+  background-size: 0.9em;
+}
+
+.accordion-body{
+  font-size: 0.85em;
+  padding: 12px 14px;
+}
+
+.displayAudioUnlockOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  background: rgba(20,33,61,0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.displayAudioUnlockOverlay[hidden]{
+  display: none;
+}
+
+.displayAudioUnlockOverlay p{
+  color: #fff;
+  font-size: 2em;
+  font-weight: bold;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.displayBanner{
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.displayBanner[hidden]{
+  display: none;
+}
+
+.displayTeamScores{
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 10px 16px;
+  background: rgba(0,0,0,0.55);
+  border-radius: 0 0 16px 16px;
+  max-width: 90vw;
+}
+
+.displayTeamChip{
+  color: #fff;
+  font-size: 1.3em;
+  font-weight: bold;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.15);
+  white-space: nowrap;
+}
+
+.displayBuzzStatus{
+  margin-top: 14px;
+  font-size: 2.2em;
+  font-weight: bold;
+  color: #fff;
+  background: #d90429;
+  padding: 12px 30px;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  display: none;
+}
+
+.displayCountdown{
+  /* Position fixe (hors du flux de la banniere) : sa taille ne doit jamais
+     pousser ou chevaucher le titre de l'epreuve / le numero de question
+     affiches plus bas dans #currentQuestionPanel. */
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2001;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  font-size: 3.2em;
+  font-weight: bold;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  border: 4px solid #f5af00;
+}
+
+.displayCountdown.urgent{
+  border-color: #d90429;
+  color: #ffb3b3;
+}
+
+.displayQrOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(20,33,61,0.96);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.displayQrOverlay.visible{
+  display: flex;
+}
+
+.displayQrOverlay .buzzQrCode{
+  background: #fff;
+  padding: 24px;
+  border-radius: 20px;
+}
+
+.displayQrOverlay .buzzQrCode img,
+.displayQrOverlay .buzzQrCode canvas{
+  width: 360px !important;
+  height: 360px !important;
+}
+
+.displayQrOverlay p{
+  color: #fff;
+  font-size: 1.6em;
+  margin-top: 20px;
+  font-weight: bold;
+}
+
+.displayScoreboardOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(20,33,61,0.96);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.displayScoreboardOverlay.visible{
+  display: flex;
+}
+
+.displayScoreboardOverlay h2{
+  color: #fff;
+  font-size: 2.2em;
+  margin-bottom: 24px;
+}
+
+.displayScoreboardList{
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 20px;
+}
+
+/* ---- Petites stats en plus du classement pur (recap de fin de partie) ---- */
+.displayScoreboardStats{
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.displayScoreboardStats div{
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 1em;
+}
+
+.displayScoreboardRow{
+  display: flex;
+  justify-content: space-between;
+  color: #fff;
+  font-size: 1.4em;
+  font-weight: 600;
+  background: rgba(255,255,255,0.12);
+  padding: 12px 20px;
+  border-radius: 12px;
+}
+
+.displayScoreboardRow span{
+  color: #f5af00;
+}
+
+/* ---- Podium (1re-2e-3e) affiche a partir de 3 equipes, avant la liste ---- */
+.podiumRow{
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.podiumBlock{
+  flex: 1;
+  max-width: 170px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  text-align: center;
+  color: #26323f;
+  padding: 14px 10px 10px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+}
+
+.podiumRank{
+  font-size: 1.6em;
+  font-weight: 800;
+}
+
+.podiumName{
+  font-size: 1.15em;
+  font-weight: 700;
+  margin: 4px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podiumScore{
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.podium-1{
+  background: linear-gradient(160deg, #ffe680, #f5af00);
+  height: 180px;
+  order: 2;
+}
+
+.podium-2{
+  background: linear-gradient(160deg, #e7ecef, #b0bec5);
+  height: 145px;
+  order: 1;
+}
+
+.podium-3{
+  background: linear-gradient(160deg, #e3b48a, #b9805a);
+  height: 115px;
+  order: 3;
+}
+
+/* ---- Ecran d'attente (avant lancement du jeu / d'une epreuve) ---- */
+.displayIdleCard{
+  text-align: center;
+  padding-top: 40px;
+}
+
+.displayIdleLogo{
+  display: block;
+  margin: 0 auto 20px;
+  max-width: 280px;
+  max-height: 140px;
+}
+
+.displayIdleCard p{
+  font-size: 1.8em;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+#displayIdleSubMessage{
+  font-size: 0.6em;
+  font-weight: 500;
+}
+
+.displayIdleCard .buzzQrCode{
+  display: inline-block;
+  margin-top: 16px;
+}
+
+body.mode-display .displayIdleLogo{
+  max-width: 360px;
+  max-height: 180px;
+}
+
+body.mode-display .displayIdleCard p{
+  font-size: 2.4em;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+/* "Preparez-vous !" (voir showIdleCard) : plus grand que le reste, qui passe
+   sur sa propre ligne (#displayIdleSubMessage) plutot que de tout entasser
+   dans une seule phrase. */
+body.mode-display #displayIdleMessage.headline{
+  font-size: 3.4em;
+  margin-bottom: 10px;
+}
+
+body.mode-display #displayIdleSubMessage{
+  font-size: 1.4em;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+body.mode-display .displayIdleCard .buzzQrCode{
+  padding: 16px;
+  background: #fff;
+  border-radius: var(--radius-md);
+}
+
+/* ---- Statut buzzer duplique dans l'encadre principal (visible pour l'animateur) ---- */
+.questionBuzzStatus{
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(0,140,149,0.15);
+  border-left: 4px solid var(--accent);
+  font-weight: 600;
+}
+
+/* Info independante verrouille/deverrouille (gestionnaire uniquement, jamais
+   sur le display) : delibrement distincte de .questionBuzzStatus ci-dessus. */
+.buzzLockStatus{
+  font-size: 0.85em;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(0,0,0,0.05);
+  color: var(--muted);
+}
+
+/* ---- Message libre pousse sur le display (texte/image/video/compte a rebours) ---- */
+.displayMessageOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  background: rgba(20,33,61,0.96);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.displayMessageOverlay.visible{
+  display: flex;
+}
+
+.displayMessageOverlay p{
+  color: #fff;
+  font-size: 2.6em;
+  font-weight: bold;
+  padding: 0 30px;
+  white-space: pre-wrap;
+}
+
+.displayMessageOverlay img{
+  max-height: 50vh;
+  border-radius: var(--radius-md);
+}
+
+.displayMessageOverlay video{
+  max-height: 50vh;
+  border-radius: var(--radius-md);
+}
+
+/* ---- Banniere de resultat (bonne/mauvaise reponse) sur le display ---- */
+.displayResultBanner{
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  z-index: 4000;
+  padding: 30px 50px;
+  border-radius: var(--radius-lg);
+  font-size: 2.6em;
+  font-weight: bold;
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  display: none;
+  pointer-events: none;
+}
+
+.displayResultBanner.visible{
+  display: block;
+}
+
+.displayResultBanner.success{
+  background: rgba(46,125,50,0.95);
+}
+
+.displayResultBanner.error{
+  background: rgba(217,4,41,0.92);
+}
+
+/* ---- Historique des parties (gestionnaire) ---- */
+.gameHistoryRow{
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(0,0,0,0.04);
+}
+
+.gameHistoryRow h6{
+  margin-bottom: 4px;
+}
+
+.gameHistoryTeams{
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
+/* ---- Notifications toast (remplace les alert() natifs bloquants) ---- */
+.toastContainer{
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 4000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 320px;
+}
+
+.toastItem{
+  background: var(--ink);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  font-size: 0.9em;
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+}
+
+.toastItem.toastVisible{
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.toastItem.toastError{
+  background: #a4302a;
+}
+
+.toastItem.toastSuccess{
+  background: #1f7a3f;
+}
+
+/* ---- Indicateurs de connexion (display / equipes) ---- */
+.connectionStatusBar{
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-size: 0.78em;
+}
+
+.connectionBadge{
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  background: rgba(0,0,0,0.06);
+  color: var(--muted);
+}
+
+.connectionBadge.connectionOk{
+  background: rgba(31,122,63,0.15);
+  color: #1f7a3f;
+}
+
+.connectionBadge.connectionKo{
+  background: rgba(164,48,42,0.15);
+  color: #a4302a;
+}
+
+/* ---- Animation d'incrementation de score ---- */
+.scoreBump{
+  animation: scoreBumpAnim 0.4s ease-out;
+}
+
+@keyframes scoreBumpAnim{
+  0%{ transform: scale(1); }
+  40%{ transform: scale(1.35); color: #1f7a3f; }
+  100%{ transform: scale(1); }
+}
+
+/* ---- Reveal progressif du podium (classement de fin de partie) ---- */
+.podiumBlock.podiumReveal{
+  animation: podiumRevealAnim 0.5s ease-out both;
+}
+
+@keyframes podiumRevealAnim{
+  0%{ opacity: 0; transform: translateY(30px) scale(0.9); }
+  100%{ opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- Barre de temps visuelle pleine largeur (ecran display), en plus du
+   chiffre dans le cercle : plus lisible/plus tendu pour la salle qu'un simple
+   nombre, notamment de loin. ---- */
+.topTimerBar{
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 6px;
+  background: rgba(0,0,0,0.3);
+  z-index: 2002;
+}
+
+.topTimerBarFill{
+  height: 100%;
+  background: #f5af00;
+  transition: width 0.3s linear, background-color 0.3s linear;
+}
+
+.topTimerBarFill.timerBarUrgent{
+  background: #d90429;
+}
+
+/* ---- Barre de temps visuelle (remplace/complete le chiffre du decompte) ---- */
+.timerBar{
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.12);
+  overflow: hidden;
+  margin: 6px 0;
+}
+
+.timerBarFill{
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.25s linear, background-color 0.25s linear;
+}
+
+.timerBarFill.timerBarUrgent{
+  background: #a4302a;
+}
+
+/* ---- Checklist de pre-lancement ---- */
+.preflightChecklist{
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+  font-size: 0.85em;
+}
+
+.preflightChecklist li{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.preflightChecklist .preflightIcon{
+  width: 16px;
+  text-align: center;
+}
+
+.preflightChecklist li.preflightOk{
+  color: #1f7a3f;
+}
+
+.preflightChecklist li.preflightWarn{
+  color: #a4302a;
+}
+
+/* ---- Mode repetition : bandeau d'avertissement permanent ---- */
+.rehearsalBanner{
+  background: #a4302a;
+  color: #fff;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.85em;
+  padding: 4px;
+}
+
+/* ---- Reordonnancement par glisser-deposer (epreuves d'un scenario) ---- */
+.dragHandle{
+  cursor: grab;
+  color: var(--muted);
+  padding: 0 6px;
+}
+
+.questionRow.dragOver{
+  border-top: 3px solid var(--accent);
+}
+
+.questionRow.dragging{
+  opacity: 0.4;
+}
+
+/* ---- Recherche dans la bibliotheque d'epreuves ---- */
+#epreuveSearchInput{
+  margin-bottom: 8px;
+}
+
+/* ---- Porte d'entree mot de passe (ecran gestionnaire uniquement) ----
+   :not([hidden]) plutot qu'un display:flex direct sur .managerLoginGate :
+   une regle d'auteur (classe) de meme specificite que [hidden] gagne sur le
+   [hidden]{display:none} du navigateur quel que soit l'ordre - sans cette
+   garde, la porte resterait visible meme avec l'attribut hidden present. */
+.managerLoginGate{
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  background: var(--ink);
+}
+
+.managerLoginGate:not([hidden]){
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.managerLoginBox{
+  background: #fff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 32px;
+  width: 90%;
+  max-width: 340px;
+  text-align: center;
+}
+
+.managerLoginBox h4{
+  margin-bottom: 18px;
+}
+
+/* ---- Table des raccourcis (modale d'aide) ---- */
+.helpShortcutsTable td:first-child{
+  width: 90px;
+}
+
+/* =====================================================================
+   REFONTE ECRAN GESTIONNAIRE (maquette v2)
+   Tout est borne a body.mode-control : l'ecran d'affichage (display) garde
+   ses styles d'origine. Palette de marque : orange #FF934F / #E0701F, vert
+   #4B967D, fonds cuir (#2A1D15 / #17100B) et parchemin (#F1E4C8 / #1B1410).
+   Clair/sombre suivent le theme du systeme (prefers-color-scheme).
+   ===================================================================== */
+body.mode-control{
+  --bg:#1B1410; --bg-glow:radial-gradient(90% 50% at 15% -10%, rgba(75,150,125,.20), transparent 60%), radial-gradient(70% 45% at 100% 0%, rgba(255,147,79,.12), transparent 60%);
+  --surface:#261b15; --surface-2:#30231b; --line:#45342a;
+  --fg:#f3e9d8; --muted:#b9a78f; --sand:#FF934F;
+  --teal:#4B967D; --teal-ink:#05150f; --teal-soft:rgba(75,150,125,.18);
+  --pa:#F2802F; --pb:#FF934F; --pc:#E0701F;
+  --good:#66bb9b; --good-soft:rgba(102,187,155,.16); --bad:#f2616d; --bad-soft:rgba(242,97,109,.16); --gold:#FF934F;
+  --leather:#17100B; --leather-fg:#F1E4C8; --leather-muted:#b9a78f; --leather-line:rgba(241,228,200,.14);
+  --shadow:0 18px 50px -20px rgba(0,0,0,.6);
+  --ink:var(--leather); --accent:var(--teal); --accent-dark:var(--teal);
+  --f-display:"Amatic SC","Segoe UI",sans-serif; --f-body:"Figtree",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  body.mode-control{
+    --bg:#F1E4C8; --bg-glow:radial-gradient(90% 50% at 15% -10%, rgba(75,150,125,.16), transparent 60%), radial-gradient(70% 45% at 100% 0%, rgba(255,147,79,.18), transparent 60%);
+    --surface:#fbf3e0; --surface-2:#f5e8cc; --line:#dcc9a3;
+    --fg:#2A1D15; --muted:#6d5b49; --sand:#a64e0c;
+    --teal:#3a7c66; --teal-ink:#ffffff; --teal-soft:rgba(75,150,125,.14);
+    --good:#2f7a5e; --good-soft:rgba(47,122,94,.12); --bad:#b8283a; --bad-soft:rgba(184,40,58,.1); --gold:#b34c08;
+    --leather:#2A1D15; --leather-fg:#F1E4C8; --leather-muted:#c9b79b; --leather-line:rgba(241,228,200,.16);
+    --shadow:0 18px 40px -22px rgba(60,40,10,.45);
+    color-scheme:light;
+  }
+}
+body.mode-control{
+  background:var(--bg-glow),var(--bg);
+  color:var(--fg);
+  font-family:var(--f-body);
+  font-size:15px;
+}
+body.mode-control kbd{font:600 11px/1 var(--f-body);padding:3px 6px;border-radius:6px;border:1px solid var(--line);background:var(--surface-2);color:var(--muted)}
+body.mode-control .i{width:1.15em;height:1.15em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none;vertical-align:-.18em}
+body.mode-control button:focus-visible,body.mode-control input:focus-visible,body.mode-control select:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+
+/* ---- coque : barre laterale cuir + contenu ---- */
+body.mode-control .mainContainer{
+  margin:16px auto;max-width:1560px;width:calc(100% - 32px);padding:0;
+  display:grid;grid-template-columns:252px minmax(0,1fr);
+  border:1px solid var(--line);border-radius:22px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden;
+}
+body.mode-control .mainc{min-width:0}
+body.mode-control .bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+body.mode-control .crumb{display:flex;flex-direction:column;min-width:0;margin-right:auto}
+body.mode-control .crumb b{font-size:15px}
+body.mode-control .crumb span{font-size:12.5px;color:var(--muted)}
+body.mode-control .panelsRow{
+  --bs-gutter-x:0;--bs-gutter-y:0;
+  display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1.05fr) minmax(0,.85fr);gap:16px;padding:16px;margin:0;
+}
+body.mode-control .panelsRow>*{width:auto;max-width:none;flex:none;margin:0}
+body.mode-control .sideCol{display:flex;flex-direction:column;gap:16px;min-width:0}
+body.mode-control .panel,
+body.mode-control #slidePanel.panel{
+  min-width:0;display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:18px;background:var(--bg);border:1px solid var(--line);
+  flex:none;max-width:none;
+}
+body.mode-control #slidePanelTitle{display:none}
+body.mode-control .columnTitle{
+  margin:0;padding:0;border:0;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+}
+body.mode-control .ph{display:flex;align-items:center;justify-content:space-between;gap:10px}
+
+/* ---- barre laterale ---- */
+body.mode-control .sidebar{background:var(--leather);color:var(--leather-fg);padding:18px 14px;display:flex;flex-direction:column;gap:18px;min-width:0}
+body.mode-control .sbrand{display:flex;align-items:center;gap:10px;padding:0 4px}
+body.mode-control .mark{width:44px;height:44px;border-radius:13px;flex:none;background:#17100B url(pictures/logo-couleur.png) 88% 18%/323% auto no-repeat}
+body.mode-control .wordmark{font:700 28px/1 var(--f-display);letter-spacing:.02em;color:#FF934F}
+body.mode-control .sbsub{font-size:12px;color:var(--leather-muted);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.mode-control .sbscenario{display:flex;flex-direction:column;gap:8px}
+body.mode-control #scenarioBar{margin:0}
+body.mode-control #scenarioBar select{background-color:var(--leather-line);color:var(--leather-fg);border-color:var(--leather-line)}
+body.mode-control #scenarioBar select option{color:#2A1D15}
+body.mode-control #scenarioBarButtons{display:flex;gap:6px;flex-wrap:wrap}
+body.mode-control .sbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--leather-muted);font-weight:700;padding:0 10px 8px}
+body.mode-control .eplist{display:flex;flex-direction:column;gap:2px;overflow-y:auto;max-height:46vh}
+body.mode-control .ep,
+body.mode-control .sact{display:flex;align-items:center;gap:10px;padding:9px 10px;border:0;border-radius:10px;background:none;color:var(--leather-fg);text-align:left;font-size:14px;font-weight:600;width:100%;min-width:0;cursor:pointer}
+body.mode-control .ep:hover,
+body.mode-control .sact:hover{background:var(--leather-line)}
+body.mode-control .ep[aria-current="true"]{background:var(--teal);color:var(--teal-ink)}
+body.mode-control .epn{width:1.15em;text-align:center;opacity:.6;font-size:12px;font-variant-numeric:tabular-nums;flex:none}
+body.mode-control .epname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.mode-control .ep .pts{font-size:12px;opacity:.7;font-variant-numeric:tabular-nums}
+body.mode-control .sfoot{margin-top:auto;display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--leather-line);padding-top:12px}
+body.mode-control .sact.sw{display:flex;align-items:center;gap:10px}
+body.mode-control .sw input{appearance:none;-webkit-appearance:none;width:34px;height:20px;border-radius:99px;background:var(--leather-line);border:0;position:relative;cursor:pointer;transition:background .15s;margin:0;flex:none}
+body.mode-control .sw input::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s}
+body.mode-control .sw input:checked{background:var(--teal)}
+body.mode-control .sw input:checked::after{transform:translateX(14px)}
+body.mode-control .sact kbd{margin-left:auto}
+body.mode-control .sidebar kbd{background:transparent;border-color:var(--leather-line);color:var(--leather-muted)}
+body.mode-control .sact.dng{color:#f2837d}
+
+/* ---- boutons Bootstrap aux couleurs de la marque ---- */
+body.mode-control .btn-primary{--bs-btn-bg:var(--teal);--bs-btn-border-color:var(--teal);--bs-btn-color:var(--teal-ink);--bs-btn-hover-bg:var(--teal);--bs-btn-hover-border-color:var(--teal);--bs-btn-hover-color:var(--teal-ink);--bs-btn-active-bg:var(--teal);--bs-btn-active-border-color:var(--teal);--bs-btn-active-color:var(--teal-ink);filter:none}
+body.mode-control .btn-primary:hover{filter:brightness(1.1)}
+body.mode-control .btn-success{--bs-btn-bg:var(--good);--bs-btn-border-color:var(--good);--bs-btn-color:#04200f;--bs-btn-hover-bg:var(--good);--bs-btn-hover-border-color:var(--good);--bs-btn-hover-color:#04200f}
+body.mode-control .btn-danger{--bs-btn-bg:var(--bad);--bs-btn-border-color:var(--bad);--bs-btn-color:#2a0409;--bs-btn-hover-bg:var(--bad);--bs-btn-hover-border-color:var(--bad);--bs-btn-hover-color:#2a0409}
+body.mode-control .btn-outline-secondary,
+body.mode-control .btn-outline-primary,
+body.mode-control .btn-outline-dark,
+body.mode-control .btn-outline-success,
+body.mode-control .btn-outline-danger,
+body.mode-control .btn-outline-warning{--bs-btn-color:var(--fg);--bs-btn-border-color:var(--line);--bs-btn-hover-bg:var(--surface-2);--bs-btn-hover-color:var(--fg);--bs-btn-hover-border-color:var(--teal);--bs-btn-active-bg:var(--surface-2);--bs-btn-active-color:var(--fg);--bs-btn-active-border-color:var(--teal);--bs-btn-disabled-color:var(--muted)}
+body.mode-control #scenarioBar .btn-outline-secondary,
+body.mode-control #scenarioBar .btn-outline-primary{--bs-btn-color:var(--leather-fg);--bs-btn-border-color:var(--leather-line);--bs-btn-hover-bg:var(--leather-line);--bs-btn-hover-color:var(--leather-fg)}
+body.mode-control .form-control,
+body.mode-control .form-select{background-color:var(--bg);color:var(--fg);border-color:var(--line)}
+body.mode-control .form-control:focus,
+body.mode-control .form-select:focus{background-color:var(--bg);color:var(--fg);border-color:var(--teal);box-shadow:0 0 0 .2rem var(--teal-soft)}
+body.mode-control .form-check-input:checked{background-color:var(--teal);border-color:var(--teal)}
+body.mode-control .form-range{accent-color:var(--teal)}
+body.mode-control .modal{--bs-modal-bg:var(--surface);--bs-modal-color:var(--fg);--bs-modal-border-color:var(--line);--bs-modal-header-border-color:var(--line);--bs-modal-footer-border-color:var(--line)}
+body.mode-control .accordion{--bs-accordion-bg:transparent;--bs-accordion-color:var(--fg);--bs-accordion-border-color:var(--line);--bs-accordion-btn-bg:var(--surface);--bs-accordion-btn-color:var(--fg);--bs-accordion-active-bg:var(--surface-2);--bs-accordion-active-color:var(--fg);--bs-accordion-btn-focus-box-shadow:0 0 0 .2rem var(--teal-soft)}
+body.mode-control [data-bs-theme="dark"] .accordion-button::after,
+body.mode-control .accordion-button::after{filter:none}
+@media (prefers-color-scheme: dark){ body.mode-control .accordion-button::after{filter:invert(1)} }
+body.mode-control a{color:var(--teal) !important}
+body.mode-control .text-muted{color:var(--muted) !important}
+
+/* ---- pastilles de connexion (barre du haut) ---- */
+body.mode-control .connectionStatusBar{display:flex;margin:0;gap:8px;font-size:13px}
+body.mode-control .connectionBadge{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:99px;font-weight:600;background:var(--surface);border:1px solid var(--line);color:var(--muted)}
+body.mode-control .connectionBadge.connectionOk{color:var(--good);background:var(--good-soft);border-color:transparent}
+body.mode-control .connectionBadge.connectionKo{color:var(--bad);background:var(--bad-soft);border-color:transparent}
+
+/* ---- scene : question en cours ---- */
+body.mode-control #currentQuestionPanel{min-height:0;padding:0;background:transparent;box-shadow:none;border:0}
+body.mode-control #questionContent:not([hidden]){display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+body.mode-control #questionContent>*{flex:0 0 100%}
+body.mode-control #questionContent>.questionMeta{flex:1 1 auto;order:0;display:flex;flex-direction:column;gap:2px;margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+body.mode-control #questionContent>.questionMeta #questionEpreuveName{color:var(--sand);font-size:13px}
+body.mode-control #questionContent>#questionNavButtons{flex:0 0 auto;order:1;display:flex;gap:6px;margin:0}
+body.mode-control #questionContent>#questionNavButtons .btn{display:inline-flex;align-items:center;gap:6px}
+body.mode-control #questionContent>.qsegs{order:2}
+body.mode-control .qsegs{display:flex;gap:3px}
+body.mode-control .qsegs i{flex:1;height:5px;border-radius:99px;background:var(--line);max-width:34px}
+body.mode-control .qsegs i.done{background:var(--teal)}
+body.mode-control .qsegs i.cur{background:var(--pb)}
+body.mode-control #questionContent>#questionAudioPlaceholder{order:3}
+body.mode-control #questionContent>#questionAudio,
+body.mode-control #questionContent>#questionVideo{order:3;width:100%;border-radius:14px}
+body.mode-control #questionContent>#questionText{order:4}
+body.mode-control #questionContent>#questionImages{order:5}
+body.mode-control #questionContent>#qcmDirectPanel{order:6}
+body.mode-control #questionContent>#questionHostNote{order:7}
+body.mode-control #questionContent>#startEpreuveButton{order:9;margin:0 !important}
+body.mode-control #questionBuzzStatus{display:none !important}
+body.mode-control .questionText{font-size:1.7em;font-weight:700;line-height:1.15;margin:0;color:var(--fg)}
+body.mode-control .empty,
+body.mode-control #controlMenuHint{padding:18px;border-radius:16px;border:1px dashed var(--line);text-align:center;color:var(--muted);font-size:14px}
+body.mode-control #questionHostNote.questionHostNote{display:flex;flex-direction:column;gap:8px;background:none;border:0;padding:0;margin:0;font-style:normal;white-space:normal}
+body.mode-control .nrow{display:grid;grid-template-columns:112px minmax(0,1fr) auto;gap:10px;align-items:start;padding:11px 13px;border-radius:12px;background:var(--surface);border:1px solid var(--line);font-size:14px}
+body.mode-control .nrow label{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sand);font-weight:700;padding-top:2px;margin:0}
+body.mode-control .nrow .txt{min-width:0;white-space:pre-wrap}
+body.mode-control .nrow .blur{filter:blur(6px);user-select:none;transition:filter .2s}
+body.mode-control .nrow .reveal{font-size:12.5px;font-weight:700;color:var(--teal);padding:2px 6px;background:none;border:0}
+body.mode-control .answerRow{background:var(--surface);color:var(--fg);border:1px solid var(--line)}
+body.mode-control .preflightChecklist .preflightOk{color:var(--good)}
+body.mode-control .preflightChecklist .preflightWarn{color:var(--bad)}
+
+/* ---- buzzer en direct ---- */
+body.mode-control .seg{display:flex;padding:3px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+body.mode-control .seg button{padding:7px 10px;border:0;border-radius:9px;background:none;font-weight:600;font-size:13px;color:var(--muted);cursor:pointer}
+body.mode-control .seg button[aria-pressed="true"]{background:var(--teal);color:var(--teal-ink)}
+body.mode-control .ring{display:flex;align-items:center;gap:14px}
+body.mode-control .ring svg{width:96px;height:96px;flex:none;transform:rotate(-90deg)}
+body.mode-control .ring circle{fill:none;stroke-width:8;stroke-linecap:round}
+body.mode-control .ring .tr{stroke:var(--line)}
+body.mode-control .ring .pr{stroke:var(--teal);transition:stroke-dashoffset .9s linear,stroke .3s}
+body.mode-control .ring .pr.low{stroke:var(--bad)}
+body.mode-control .rtxt{display:flex;flex-direction:column;gap:4px;min-width:0}
+body.mode-control .rnum{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+body.mode-control .rlbl{font-size:13px;color:var(--muted)}
+body.mode-control .cta{width:100%;padding:15px;border:0;border-radius:14px;background:linear-gradient(135deg,var(--pb),var(--pc));color:#2b1100;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 12px 26px -12px rgba(224,112,31,.7);transition:transform .1s;cursor:pointer}
+body.mode-control .cta:active{transform:scale(.98)}
+body.mode-control .cta kbd{background:rgba(43,17,0,.12);border-color:rgba(43,17,0,.25);color:#2b1100}
+body.mode-control .locks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+body.mode-control .lk{padding:10px 6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;cursor:pointer}
+body.mode-control .lk:hover{border-color:var(--teal)}
+body.mode-control .buzzLockStatus{font-size:13px;color:var(--muted);background:none;padding:0}
+body.mode-control .activeTeamPanel:not([hidden]){margin:0;padding:16px;border-radius:16px;border:2px solid var(--teal);background:var(--teal-soft);display:flex;flex-direction:column;gap:12px;text-align:left}
+body.mode-control .activeTeamPanelLabel{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--teal);margin:0}
+body.mode-control .activeTeamName{font:700 40px/1 var(--f-display);letter-spacing:.02em;color:var(--fg);margin:0}
+body.mode-control .activeTeamTimer{font-size:13px;color:var(--muted)}
+body.mode-control .judge{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+body.mode-control .jb{height:58px;border:0;border-radius:14px;font-weight:700;font-size:15.5px;display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .1s;cursor:pointer}
+body.mode-control .jb:active{transform:scale(.97)}
+body.mode-control .jb.good{background:var(--good);color:#04200f}
+body.mode-control .jb.bad{background:var(--bad);color:#2a0409}
+body.mode-control .buzzPodiumPanel{margin:0}
+body.mode-control .buzzQueueList{gap:8px}
+body.mode-control .buzzQueueRow{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-weight:600;font-size:14.5px}
+body.mode-control .buzzQueueRow:hover{background:var(--surface-2);border-color:var(--teal)}
+body.mode-control .buzzQueueRank{background:var(--surface-2);color:var(--fg)}
+body.mode-control .buzzQueueRow.isSpeaking{background:var(--teal-soft);border-color:var(--teal);box-shadow:none}
+body.mode-control .buzzQueueRow.isSpeaking:hover{background:var(--teal-soft)}
+body.mode-control .buzzQueueRow.isSpeaking .buzzQueueStatus{color:var(--teal)}
+body.mode-control .buzzQueueRow.isWrong{opacity:.55}
+body.mode-control .buzzQueueRow.isWrong:hover{background:var(--surface);border-color:var(--line)}
+body.mode-control .undo{width:100%;padding:11px;border-radius:12px;border:1px solid var(--gold);background:transparent;color:var(--gold);font-weight:700;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+body.mode-control .accordion-button{font-size:.875rem;font-weight:600}
+
+/* ---- equipes + affichage + rejoindre ---- */
+body.mode-control .teamList{gap:8px}
+body.mode-control .team{
+  margin:0;width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;
+  background:var(--surface) !important;color:var(--fg);border:1px solid var(--line);box-shadow:none;
+}
+body.mode-control .team:hover{transform:none;border-color:var(--teal);box-shadow:none}
+body.mode-control .team .dot{width:12px;height:12px;border-radius:50%;background:var(--c,var(--teal));flex:none}
+body.mode-control .teamNameCell{font-weight:600}
+body.mode-control .teamEditBtn{color:var(--muted);cursor:pointer}
+body.mode-control .teamEditBtn:hover{color:var(--teal)}
+body.mode-control .pointBadge .badge{background:transparent !important;color:var(--fg);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;padding:0}
+body.mode-control .scoreBump{color:var(--good)}
+body.mode-control #teamActions{margin-top:2px}
+body.mode-control .acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+body.mode-control .act{padding:10px 8px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center;gap:6px;text-align:center;cursor:pointer}
+body.mode-control .act:hover{border-color:var(--teal)}
+body.mode-control .act.wide{width:100%;margin-top:8px}
+body.mode-control .buzzerLinkBlock{display:flex;flex-direction:column;gap:10px;align-items:center}
+body.mode-control .buzzQrCode{margin:0}
+
+/* ---- modales (aide, mot de passe, points...) ---- */
+body.mode-control .helpShortcutsTable{--bs-table-bg:transparent;--bs-table-color:var(--fg);--bs-table-border-color:var(--line)}
+body.mode-control .modal-title{font-weight:700}
+
+/* ---- adaptation ---- */
+@media (max-width:1280px){
+  body.mode-control .panelsRow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.mode-control #slidePanel.panel{grid-column:1 / -1}
+}
+@media (max-width:980px){
+  body.mode-control .mainContainer{grid-template-columns:minmax(0,1fr)}
+  body.mode-control .eplist{flex-direction:row;overflow-x:auto;overflow-y:hidden;max-height:none}
+  body.mode-control .ep{width:auto;white-space:nowrap;flex:none}
+  body.mode-control .sfoot{flex-direction:row;flex-wrap:wrap;margin-top:0}
+  body.mode-control .sact{width:auto}
+}
+@media (max-width:760px){
+  body.mode-control .panelsRow{grid-template-columns:minmax(0,1fr)}
+  body.mode-control .nrow{grid-template-columns:minmax(0,1fr)}
+  body.mode-control .mainContainer{width:calc(100% - 16px);margin:8px auto;border-radius:16px}
+}
+
+/* ---- l'ecran d'affichage ignore toute la coque de gestion ---- */
+body.mode-display .sidebar,
+body.mode-display .bar,
+body.mode-display .sideCol,
+body.mode-display .joinCollect,
+body.mode-display .buzzerCollect{display:none !important}
+body.mode-display .mainContainer{display:block}
+
+/* complements */
+body.mode-control #epreuvesMenuPanel{display:none !important}
+body.mode-control .team .teamNameCell{flex:1;min-width:0}
+body.mode-control .panelsRow>.panel,
+body.mode-control .sideCol>.panel{flex:none;max-width:none;width:auto}
+body.mode-control .seg button{white-space:nowrap}
+body.mode-control .ph .columnTitle{min-width:0}
+body.mode-display #questionSegs{display:none}
+
+/* =====================================================================
+   VOTE DE L'EPREUVE SUIVANTE (facultatif)
+   ===================================================================== */
+/* -- ecran d'affichage : overlay plein cadre aux couleurs de la marque -- */
+.displayVoteOverlay{
+  position: fixed; inset: 0; z-index: 2600;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+  padding: 4vh 4vw;
+  background: radial-gradient(90% 60% at 20% 0%, rgba(75,150,125,.28), transparent 60%), radial-gradient(70% 50% at 100% 0%, rgba(255,147,79,.2), transparent 60%), #17100B;
+  color: #F1E4C8; text-align: center;
+}
+.displayVoteOverlay[hidden]{ display: none; }
+.displayVoteTitle{ font: 700 clamp(2.4rem, 6vw, 5rem)/1 "Amatic SC", "Segoe UI", sans-serif; letter-spacing: .03em; color: #FF934F; margin: 0; }
+.displayVoteCountdown{ font-size: clamp(2.5rem, 7vw, 6rem); font-weight: 700; font-variant-numeric: tabular-nums; min-height: 1.1em; line-height: 1; }
+.displayVoteCountdown.urgent{ color: #f2616d; }
+.displayVoteCards{ display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; width: 100%; max-width: 1400px; }
+.voteCard{
+  flex: 1 1 260px; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 24px 20px; border-radius: 22px; background: rgba(241,228,200,.08); border: 2px solid rgba(241,228,200,.16);
+  transition: transform .25s, opacity .3s, border-color .2s, background .2s;
+}
+.voteCardIcon{ font-size: clamp(2.4rem, 5vw, 4rem); line-height: 1; }
+.voteCardName{ font-size: clamp(1.4rem, 2.6vw, 2.4rem); font-weight: 700; }
+.voteCardBar{ width: 100%; height: 14px; border-radius: 99px; background: rgba(241,228,200,.14); overflow: hidden; }
+.voteCardBar i{ display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #FF934F, #E0701F); transition: width .5s ease; }
+.voteCardCount{ font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.voteCard.flash{ transform: scale(1.06); border-color: #FF934F; background: rgba(255,147,79,.22); }
+.voteCard.isWinner{ transform: scale(1.1); border-color: #66bb9b; background: rgba(75,150,125,.3); box-shadow: 0 0 60px rgba(75,150,125,.5); }
+.voteCard.dim{ opacity: .3; }
+.displayVoteFooter{ font-size: clamp(1.1rem, 2vw, 1.8rem); color: #b9a78f; margin: 0; min-height: 1.4em; }
+@media (prefers-reduced-motion: reduce){ .voteCard, .voteCardBar i{ transition: none; } }
+
+/* -- ecran gestionnaire : panneau de suivi + reglages -- */
+body.mode-control #displayVoteOverlay{ display: none !important; }
+body.mode-control .votePanel:not([hidden]){ display: flex; flex-direction: column; gap: 12px; }
+body.mode-control .voteCountdown{ font-weight: 700; color: var(--sand); font-variant-numeric: tabular-nums; }
+body.mode-control .voteProgress{ font-size: 13px; color: var(--muted); }
+body.mode-control .voteOptions{ display: flex; flex-direction: column; gap: 8px; }
+body.mode-control .voteOpt{ padding: 11px 13px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 7px; }
+body.mode-control .voteOpt.isWinner{ border-color: var(--teal); background: var(--teal-soft); }
+body.mode-control .voteOptHead{ display: flex; align-items: center; gap: 10px; }
+body.mode-control .voteOptName{ flex: 1; min-width: 0; font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.mode-control .voteOptCount{ font-weight: 700; font-variant-numeric: tabular-nums; }
+body.mode-control .voteOptCrown{ display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--teal); }
+body.mode-control .voteBar{ height: 7px; border-radius: 99px; background: var(--line); overflow: hidden; }
+body.mode-control .voteBar i{ display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--pb), var(--pc)); }
+body.mode-control .voteOpt.isWinner .voteBar i{ background: var(--teal); }
+body.mode-control .voteVoters{ font-size: 12px; color: var(--muted); }
+body.mode-control .voteActions{ display: flex; gap: 8px; flex-wrap: wrap; }
+body.mode-control .sblrow{ display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 6px; }
+body.mode-control .sbmini{ display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--leather-line); border-radius: 99px; background: none; color: var(--leather-fg); font: 700 11px var(--f-body); letter-spacing: .04em; text-transform: none; cursor: pointer; }
+body.mode-control .sbmini:hover{ background: var(--leather-line); }
+body.mode-control .sbmini[hidden]{ display: none; }
+body.mode-control .scenarioVoteBox{ border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+body.mode-control .scenarioVoteBox legend{ float: none; width: auto; font-size: 13px; font-weight: 700; color: var(--sand); padding: 0 6px; margin: 0; }
+body.mode-control .voteSetupEpreuves{ display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; padding: 6px; border: 1px solid var(--line); border-radius: 10px; }
+body.mode-control .voteSetupRow{ display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; cursor: pointer; font-size: 14px; margin: 0; }
+body.mode-control .voteSetupRow:hover{ background: var(--surface-2); }
+body.mode-control .voteOptHead .reveal{font-size:12.5px;font-weight:700;color:var(--teal);background:none;border:0;padding:2px 6px;cursor:pointer}

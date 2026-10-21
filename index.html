@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="fr">
+
+	<head>
+		<meta charset="utf-8">
+
+		<title>The Big Team Quiz</title>
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amatic+SC:wght@700&family=Figtree:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="main.css">
+	</head>
+	<body>
+    <script>
+      // Deplace ici, tout en haut (au lieu du bas du fichier), pour que la
+      // porte d'entree du gestionnaire ci-dessous puisse s'appuyer dessus des
+      // le premier rendu, avant meme le reste du contenu de la page.
+      window.BUZZ_SERVER_URL = new URLSearchParams(location.search).get('buzz') || "http://10.0.0.98:3000"; // A adapter apres deploiement du serveur Node (voir server/README.md)
+      window.APP_MODE = new URLSearchParams(location.search).get('mode') === 'display' ? 'display' : 'control';
+    </script>
+    <div id="managerLoginGate" class="managerLoginGate" hidden>
+      <div class="managerLoginBox">
+        <h4>🔒 Accès gestionnaire</h4>
+        <input type="password" id="managerLoginPasswordInput" class="form-control" placeholder="Mot de passe" autofocus>
+        <button type="button" id="managerLoginSubmitButton" class="btn btn-primary w-100 mt-2">Entrer</button>
+        <p id="managerLoginError" class="text-danger small mt-2" hidden>Mot de passe incorrect.</p>
+      </div>
+    </div>
+    <script>
+      // Affichee immediatement si c'est l'ecran gestionnaire et qu'aucune
+      // authentification valide (et non expiree - voir managerAuthenticatedUntil,
+      // ecrit par main.js lors d'une connexion reussie) n'est deja memorisee sur
+      // ce navigateur - avant meme que le reste du contenu (et main.js) ne
+      // s'execute, pour eviter un flash de l'interface reelle. Jamais sur le
+      // display ni sur l'appli joueur (fichier a part) : uniquement l'ecran de gestion.
+      var authUntil = parseInt(localStorage.getItem('managerAuthenticatedUntil'), 10);
+      if(window.APP_MODE === 'control' && !(authUntil && Date.now() < authUntil)){
+        document.getElementById('managerLoginGate').hidden = false;
+      }
+    </script>
+    <div id="rehearsalBanner" class="rehearsalBanner" hidden>🎬 MODE RÉPÉTITION — cette partie ne sera pas enregistrée dans l'historique</div>
+    <div id="toastContainer" class="toastContainer"></div>
+    <div id="displayAudioUnlockOverlay" class="displayAudioUnlockOverlay" hidden>
+      <p>🔊 Cliquez pour activer le son</p>
+    </div>
+    <div id="displayTopTimerBar" class="topTimerBar" hidden><div id="displayTopTimerBarFill" class="topTimerBarFill"></div></div>
+    <div id="displayBanner" class="displayBanner" hidden>
+      <div id="displayTeamScores" class="displayTeamScores"></div>
+      <div id="displayBuzzStatus" class="displayBuzzStatus"></div>
+      <div id="displayCountdown" class="displayCountdown"></div>
+    </div>
+    <div id="displayQrOverlay" class="displayQrOverlay">
+      <div id="displayQrCode" class="buzzQrCode"></div>
+      <p>Scannez pour rejoindre !</p>
+    </div>
+    <div id="displayScoreboardOverlay" class="displayScoreboardOverlay">
+      <h2 id="displayScoreboardTitle">Classement</h2>
+      <div id="displayScoreboardList" class="displayScoreboardList"></div>
+      <div id="displayScoreboardStats" class="displayScoreboardStats" hidden></div>
+    </div>
+    <div id="displayMessageOverlay" class="displayMessageOverlay">
+      <div id="displayMessageCountdown" class="displayCountdown" style="position: static;"></div>
+      <img id="displayMessageImage" hidden>
+      <video id="displayMessageVideo" autoplay hidden></video>
+      <p id="displayMessageText"></p>
+    </div>
+    <div id="displayResultBanner" class="displayResultBanner"></div>
+    <div id="displayVoteOverlay" class="displayVoteOverlay" hidden>
+      <h2 id="displayVoteTitle" class="displayVoteTitle">Votez pour la prochaine épreuve !</h2>
+      <div id="displayVoteCountdown" class="displayVoteCountdown"></div>
+      <div id="displayVoteCards" class="displayVoteCards"></div>
+      <p id="displayVoteFooter" class="displayVoteFooter"></p>
+    </div>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+      <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+      <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01"/></symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></symbol>
+      <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+      <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a4 4 0 0 1 0 6"/></symbol>
+      <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></symbol>
+      <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M20 20h.01M17 20v-3"/></symbol>
+      <symbol id="i-msg" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4V5z"/></symbol>
+      <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+      <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+      <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
+      <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+      <symbol id="i-vote" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+    </svg>
+    <div class="container-fluid mainContainer shell">
+      <aside class="sidebar" aria-label="Navigation de la partie">
+        <div class="sbrand">
+          <span class="mark" role="img" aria-label="Team Building du Phoenix"></span>
+          <div><div class="wordmark">Big Team Quiz</div><div class="sbsub" id="sidebarScenarioName">Aucun scénario lancé</div></div>
+        </div>
+        <div id="scenarioBar" class="sbscenario">
+          <select id="scenarioSelect" class="form-select form-select-sm" aria-label="Scénario"></select>
+          <div id="scenarioBarButtons">
+            <button id="launchScenarioButton" type="button" class="btn btn-primary btn-sm">Lancer</button>
+            <button id="showEpreuveMenuButton" type="button" class="btn btn-outline-primary btn-sm" hidden>Épreuves</button>
+            <button id="toggleMenuOnDisplayButton" type="button" class="btn btn-outline-secondary btn-sm" hidden title="Afficher la liste des épreuves sur le display">👁</button>
+          </div>
+        </div>
+        <div class="sbeps">
+          <div class="sbl sblrow"><span>Épreuves</span><button id="openVoteSetupButton" type="button" class="sbmini" hidden title="Faire voter les équipes pour l'épreuve suivante"><svg class="i"><use href="#i-vote"/></svg>Vote</button></div>
+          <div class="eplist" id="sidebarEpreuves"></div>
+        </div>
+        <div class="sfoot">
+          <label class="sact sw" for="rehearsalModeCheckbox"><input type="checkbox" id="rehearsalModeCheckbox">Mode répétition</label>
+          <label class="sact sw" for="autoFullscreenCheckbox" id="autoFullscreenRow" hidden><input type="checkbox" id="autoFullscreenCheckbox">Plein écran automatique</label>
+          <button id="manageEpreuvesButton" type="button" class="sact"><svg class="i"><use href="#i-film"/></svg>Gérer les épreuves</button>
+          <button id="manageScenariosButton" type="button" class="sact"><svg class="i"><use href="#i-list"/></svg>Gérer les scénarios</button>
+          <button id="openGameHistoryModalButton" type="button" class="sact"><svg class="i"><use href="#i-clock"/></svg>Historique des parties</button>
+          <button id="openHelpModalButton" type="button" class="sact" title="Aide / raccourcis clavier"><svg class="i"><use href="#i-help"/></svg>Aide et raccourcis <kbd>?</kbd></button>
+          <button id="openChangePasswordModalButton" type="button" class="sact"><svg class="i"><use href="#i-key"/></svg>Changer le mot de passe</button>
+          <button id="managerLogoutButton" type="button" class="sact"><svg class="i"><use href="#i-lock"/></svg>Verrouiller l'écran</button>
+          <button id="closeGameButton" type="button" class="sact dng"><svg class="i"><use href="#i-x"/></svg>Clôturer la partie</button>
+        </div>
+      </aside>
+      <div class="mainc">
+        <div class="bar">
+          <div class="crumb"><b id="crumbT">Aucune épreuve en cours</b><span id="crumbS">Choisissez un scénario puis une épreuve</span></div>
+          <div id="displayConnectionStatus" class="connectionStatusBar"></div>
+          <div id="phoneConnectionStatus" class="connectionStatusBar"></div>
+        </div>
+        <div class="row panelsRow">
+          <!-- Scene : question en cours (sur le display, c'est tout l'ecran) -->
+          <div id="slidePanel" class="col-5 panel">
+            <h5 id="slidePanelTitle" class="columnTitle">Épreuves</h5>
+            <div id="currentQuestionPanel">
+              <div id="noScenarioMessage" class="text-muted">
+                <p>Choisissez un scénario et cliquez sur "Lancer" pour commencer.</p>
+                <ul id="preflightChecklist" class="preflightChecklist"></ul>
+              </div>
+              <div id="controlMenuHint" class="empty" hidden>
+                <p>Choisissez une épreuve dans la barre latérale pour commencer.</p>
+                <button id="openVoteSetupHintButton" type="button" class="btn btn-outline-secondary btn-sm"><svg class="i"><use href="#i-vote"/></svg> Ou faire voter les équipes</button>
+              </div>
+              <div id="votePanel" class="votePanel" hidden>
+                <div class="ph">
+                  <h5 class="columnTitle" id="voteTitle">Vote : épreuve suivante</h5>
+                  <span id="voteCountdown" class="voteCountdown"></span>
+                </div>
+                <div id="voteProgress" class="voteProgress"></div>
+                <div id="voteOptions" class="voteOptions"></div>
+                <div id="voteActions" class="voteActions"></div>
+              </div>
+              <div id="displayIdleCard" class="displayIdleCard" hidden>
+                <img src="pictures/logo.png" class="displayIdleLogo" alt="Logo">
+                <p id="displayIdleMessage"></p>
+                <p id="displayIdleSubMessage" hidden></p>
+                <div id="displayIdleQrCode" class="buzzQrCode"></div>
+              </div>
+              <div id="epreuvesMenuPanel" hidden>
+                <h5 id="epreuvesMenuTitle" class="columnTitle">Épreuves du scénario</h5>
+                <div id="epreuvesMenuDisplayHeader" class="epreuvesMenuDisplayHeader">
+                  <img src="pictures/logo.png" class="displayIdleLogo" alt="Logo">
+                  <p>Choisissez une épreuve</p>
+                </div>
+                <div id="epreuvesMenuList" class="epreuvesList epreuvesMenuList"></div>
+              </div>
+              <div id="questionContent" hidden>
+                <div class="questionMeta">
+                  <span id="questionEpreuveName"></span>
+                  <span id="questionPosition"></span>
+                </div>
+                <div id="questionNavButtons">
+                  <button id="prevQuestionButton" type="button" class="btn btn-outline-secondary btn-sm" title="Raccourci : ←"><svg class="i"><use href="#i-left"/></svg> <kbd>←</kbd></button>
+                  <button id="nextQuestionButton" type="button" class="btn btn-outline-secondary btn-sm" title="Raccourci : →"><kbd>→</kbd> <svg class="i"><use href="#i-right"/></svg></button>
+                </div>
+                <div id="questionSegs" class="qsegs" aria-hidden="true"></div>
+                <div id="questionHostNote" class="questionHostNote" hidden></div>
+                <div id="questionText" class="questionText"></div>
+                <div id="questionImages" class="questionImages"></div>
+                <div id="questionAudioPlaceholder" class="questionAudioPlaceholder" hidden></div>
+                <audio id="questionAudio" hidden></audio>
+                <video id="questionVideo" hidden></video>
+                <div id="qcmDirectPanel" hidden>
+                  <div id="answersReceivedList"></div>
+                </div>
+                <div id="questionBuzzStatus" class="questionBuzzStatus" hidden></div>
+                <button id="startEpreuveButton" type="button" class="btn btn-success btn-lg w-100 mt-2" hidden>▶ Lancer l'épreuve</button>
+              </div>
+            </div>
+          </div>
+          <!-- Buzzer en direct -->
+          <div class="buzzerCollect col-3 panel">
+            <div class="ph">
+              <h5 class="columnTitle">Buzzer en direct</h5>
+              <div class="seg" role="group" aria-label="Mode de buzz">
+                <button type="button" id="modeSingleBtn" data-bmode="single" aria-pressed="false">Un seul</button>
+                <button type="button" id="modePodiumBtn" data-bmode="podium3" aria-pressed="false">Podium de 3</button>
+              </div>
+            </div>
+            <div class="ring">
+              <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="tr" cx="50" cy="50" r="44"/><circle class="pr" id="ctlRingPr" cx="50" cy="50" r="44" stroke-dasharray="276.46" stroke-dashoffset="276.46"/></svg>
+              <div class="rtxt"><span class="rnum" id="ctlRingNum">–</span><span class="rlbl" id="ctlRingLbl">Aucune question en cours</span></div>
+            </div>
+            <button id="openBuzzButton" type="button" class="cta" title="Raccourci : Espace"><svg class="i"><use href="#i-bolt"/></svg>Lancer le buzz <kbd>Espace</kbd></button>
+            <div class="locks lockButtonsRow">
+              <button id="lockAllButton" type="button" class="lk" title="Verrouiller tous les buzzers (raccourci : L)"><svg class="i"><use href="#i-lock"/></svg>Tout <kbd>L</kbd></button>
+              <button id="unlockAllButton" type="button" class="lk" title="Déverrouiller tous les buzzers (raccourci : U)"><svg class="i"><use href="#i-unlock"/></svg>Tout <kbd>U</kbd></button>
+              <button id="unlockRemainingButton" type="button" class="lk" title="Déverrouiller ceux qui n’ont pas répondu (raccourci : R)"><svg class="i"><use href="#i-unlock"/></svg>Restants <kbd>R</kbd></button>
+            </div>
+            <div id="buzzLockStatus" class="buzzLockStatus" hidden></div>
+            <div id="activeTeamPanel" class="activeTeamPanel" hidden>
+              <div class="activeTeamPanelLabel">Répond actuellement</div>
+              <h2 id="activeTeamName" class="activeTeamName"></h2>
+              <div id="activeTeamTimer" class="activeTeamTimer" hidden></div>
+              <div class="judge">
+                <button id="correctAnswerButton" type="button" class="jb good"><svg class="i"><use href="#i-check"/></svg>Bonne réponse</button>
+                <button id="wrongAnswerButton" type="button" class="jb bad"><svg class="i"><use href="#i-x"/></svg>Mauvaise réponse</button>
+              </div>
+            </div>
+            <div class="ph"><h5 class="columnTitle">File d'attente</h5></div>
+            <div id="queueEmpty" class="empty">En attente d'un buzz…</div>
+            <div id="buzzResults" class="buzzPodiumPanel" hidden></div>
+            <button id="undoLastValidationButton" type="button" class="undo" hidden><svg class="i"><use href="#i-undo"/></svg>Annuler la dernière validation</button>
+            <div class="accordion" id="buzzSettingsAccordion">
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#buzzSettingsCollapse">
+                    Réglages du buzzer
+                  </button>
+                </h2>
+                <div id="buzzSettingsCollapse" class="accordion-collapse collapse" data-bs-parent="#buzzSettingsAccordion">
+                  <div class="accordion-body">
+                    <label class="form-label d-block">Mode de buzz</label>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="buzzModeRadio" id="buzzModeSingle" value="single" checked>
+                      <label class="form-check-label" for="buzzModeSingle">Un seul buzzer</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="buzzModeRadio" id="buzzModePodium" value="podium3">
+                      <label class="form-check-label" for="buzzModePodium">Podium de 3</label>
+                    </div>
+                    <label for="maxAnswerSecondsInput" class="form-label mt-2">Temps de réflexion max avant déblocage auto (secondes, 0 = désactivé)</label>
+                    <input type="number" min="0" class="form-control form-control-sm" id="maxAnswerSecondsInput" value="0">
+                    <div class="form-check mt-2">
+                      <input class="form-check-input" type="checkbox" id="excludeWrongTeamCheckbox" checked>
+                      <label class="form-check-label" for="excludeWrongTeamCheckbox">Exclure l’équipe fautive pour le reste de la question</label>
+                    </div>
+                    <div class="form-check mt-2">
+                      <input class="form-check-input" type="checkbox" id="autoOpenOnSlideChangeCheckbox" checked>
+                      <label class="form-check-label" for="autoOpenOnSlideChangeCheckbox">Débloquer automatiquement à chaque nouvelle question</label>
+                    </div>
+                    <label for="buzzVolumeInput" class="form-label mt-2">Volume du son de buzz (<span id="buzzVolumeValue">100</span>%)</label>
+                    <div class="d-flex gap-2 align-items-center">
+                      <input type="range" min="0" max="100" step="5" class="form-range flex-grow-1" id="buzzVolumeInput" value="100">
+                      <button id="testBuzzSoundButton" type="button" class="btn btn-outline-secondary btn-sm" title="Tester le son au volume actuel">🔊 Tester</button>
+                    </div>
+                    <button id="saveBuzzConfigButton" type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2">Enregistrer les réglages</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Colonne de droite : equipes, affichage, joueurs -->
+          <div class="sideCol">
+            <div class="teamCollect col-2 panel">
+              <h5 class="columnTitle">Équipes</h5>
+              <div id="listOfTeam" class="teamList"></div>
+              <div id="teamActions">
+                <button id="addTeam" type="button" class="btn btn-success toolbarBtn" title="Ajouter une équipe">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-circle" viewBox="0 0 16 16">
+                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+                    <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="displayCollect col-2 panel">
+              <h5 class="columnTitle">Écran d'affichage</h5>
+              <div class="acts">
+                <button id="palmaresButton" type="button" class="act"><svg class="i"><use href="#i-trophy"/></svg>Classement</button>
+                <button id="allTimeLeaderboardButton" type="button" class="act"><svg class="i"><use href="#i-trophy"/></svg>Top 10</button>
+                <button id="toggleQrOnDisplayButton" type="button" class="act"><svg class="i"><use href="#i-qr"/></svg>Afficher QR</button>
+                <button id="openDisplayMessageModalButton" type="button" class="act"><svg class="i"><use href="#i-msg"/></svg>Message</button>
+              </div>
+              <button id="openDisplayWindowButton" type="button" class="act wide"><svg class="i"><use href="#i-monitor"/></svg>Ouvrir l’écran d’affichage</button>
+            </div>
+            <div class="joinCollect panel">
+              <h5 class="columnTitle">Rejoindre la partie</h5>
+              <div class="text-center buzzerLinkBlock">
+                <div id="buzzQrCode" class="buzzQrCode"></div>
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control" id="buzzLinkInput" readonly>
+                  <button class="btn btn-outline-secondary" type="button" id="copyBuzzLinkButton">Copier</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+	<!-- Modal reglages du vote de l'epreuve suivante -->
+	<div class="modal fade" id="voteSetupModal" tabindex="-1" role="dialog" aria-hidden="true">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-body">
+					<h5 class="modal-title">Faire voter les équipes</h5>
+					<p class="text-muted small mb-2">Chaque équipe a un vote, modifiable jusqu'à la clôture.</p>
+					<label class="form-label mb-1">Épreuves proposées</label>
+					<div id="voteSetupEpreuves" class="voteSetupEpreuves"></div>
+					<div class="row g-2 mt-1">
+						<div class="col-6">
+							<label class="form-label small mb-0" for="voteSetupCount">Nombre d'options</label>
+							<select id="voteSetupCount" class="form-select form-select-sm">
+								<option value="0">Toutes celles cochées</option>
+								<option value="2">2 tirées au hasard</option>
+								<option value="3">3 tirées au hasard</option>
+								<option value="4">4 tirées au hasard</option>
+							</select>
+						</div>
+						<div class="col-6">
+							<label class="form-label small mb-0" for="voteSetupDuration">Durée (s, 0 = clôture manuelle)</label>
+							<input type="number" min="0" max="600" class="form-control form-control-sm" id="voteSetupDuration" value="30">
+						</div>
+					</div>
+					<div class="form-check mt-2">
+						<input class="form-check-input" type="checkbox" id="voteSetupLive">
+						<label class="form-check-label" for="voteSetupLive">Montrer les votes en direct <span class="text-muted">(sinon secrets jusqu'au résultat)</span></label>
+					</div>
+					<div class="form-check mt-1">
+						<input class="form-check-input" type="checkbox" id="voteSetupAutoLaunch">
+						<label class="form-check-label" for="voteSetupAutoLaunch">Lancer automatiquement l'épreuve gagnante</label>
+					</div>
+					<p id="voteSetupError" class="text-danger small mt-2 mb-0" hidden></p>
+					<div class="mt-3 d-flex gap-2">
+						<button id="startVoteButton" type="button" class="btn btn-primary btn-sm">Lancer le vote</button>
+						<button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Modal Add Team-->
+    <div class="modal fade" id="addTeamModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-body">
+            <h5 class="modal-title">Insérer le nom de l'équipe</h5>
+            <br>
+            <div class="form-group">
+              <input type="text" class="form-control" id="teamNameInput">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button id="addTeamButton" type="button" class="btn btn-primary">Ajouter l'équipe</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal Rename Team-->
+    <div class="modal fade" id="renameTeamModal" tabindex="-1" role="dialog" aria-labelledby="renameTeamModalLabel" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-body">
+            <h5 class="modal-title">Renommer l'équipe</h5>
+            <br>
+            <div class="form-group">
+              <label for="renameTeamInput" class="form-label">Nom</label>
+              <input type="text" class="form-control" id="renameTeamInput">
+            </div>
+            <div class="form-group mt-2">
+              <label for="renameTeamSoundSelect" class="form-label">Son de buzz</label>
+              <select class="form-select" id="renameTeamSoundSelect"></select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button id="deleteTeamButton" type="button" class="btn btn-outline-danger">Supprimer l'équipe</button>
+            <button id="renameTeamButton" type="button" class="btn btn-primary">Renommer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal Agrandir une image de question (miniatures cote gestionnaire) -->
+    <div class="modal fade" id="imageLightboxModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content imageLightboxContent">
+          <img id="imageLightboxImg" src="" alt="">
+        </div>
+      </div>
+    </div>
+    <!-- Modal Aide / raccourcis clavier -->
+    <!-- Modal Changer le mot de passe gestionnaire -->
+    <div class="modal fade" id="changePasswordModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+          <div class="modal-body">
+            <h5 class="modal-title mb-3">🔑 Changer le mot de passe</h5>
+            <label class="form-label">Mot de passe actuel</label>
+            <input type="password" class="form-control mb-2" id="currentPasswordInput">
+            <label class="form-label">Nouveau mot de passe</label>
+            <input type="password" class="form-control mb-2" id="newPasswordInput">
+            <label class="form-label">Confirmer le nouveau mot de passe</label>
+            <input type="password" class="form-control" id="confirmNewPasswordInput">
+            <p id="changePasswordError" class="text-danger small mt-2 mb-0" hidden></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+            <button type="button" id="changePasswordSubmitButton" class="btn btn-primary">Changer le mot de passe</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal fade" id="helpModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+          <div class="modal-body">
+            <h5 class="modal-title mb-3">⌨️ Raccourcis clavier</h5>
+            <table class="table table-sm helpShortcutsTable">
+              <tbody>
+                <tr><td><kbd>Espace</kbd></td><td>Lancer le buzz</td></tr>
+                <tr><td><kbd>L</kbd></td><td>Verrouiller tous les buzzers</td></tr>
+                <tr><td><kbd>U</kbd></td><td>Déverrouiller tous les buzzers</td></tr>
+                <tr><td><kbd>R</kbd></td><td>Déverrouiller les buzzers restants</td></tr>
+                <tr><td><kbd>←</kbd></td><td>Question précédente</td></tr>
+                <tr><td><kbd>→</kbd></td><td>Question suivante</td></tr>
+                <tr><td><kbd>?</kbd></td><td>Afficher cette aide</td></tr>
+              </tbody>
+            </table>
+            <p class="text-muted small mb-0">Désactivés pendant la saisie dans un champ ou pendant qu'une fenêtre est ouverte.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal de confirmation generique (remplace les confirm() natifs, bloquants
+         et pas dans le style de l'appli, pour toute action destructive) -->
+    <div class="modal fade" id="confirmActionModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+          <div class="modal-body">
+            <p id="confirmActionMessage" class="mb-0"></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+            <button type="button" id="confirmActionConfirmButton" class="btn btn-danger">Confirmer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal Add Point-->
+    <div class="modal fade" id="addPointModal" tabindex="-1" role="dialog" aria-labelledby="addPointModal" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content manualPointModal">
+          <div class="modal-body">
+            <h5 class="modal-title">Combien de points?</h5>
+            <br>
+            	<div class='row addPointLine justify-content-center'><div class="col-2 center-block"><button data-point=-1 type="button" class="btn addPointButton btn-danger">-1</button></div><div class="col-2 center-block"><button data-point=1 type="button" class="btn addPointButton btn-success">1</button></div></div>
+            	<div class='row addPointLine justify-content-center'><div class="col-2"><button data-point=-2 type="button" class="btn addPointButton btn-danger">-2</button></div><div class="col-2"><button data-point=2 type="button" class="btn addPointButton btn-success">2</button></div></div>
+            	<div class='row addPointLine justify-content-center'><div class="col-2"><button data-point=-5 type="button" class="btn addPointButton btn-danger">-5</button></div><div class="col-2"><button data-point=5 type="button" class="btn addPointButton btn-success">5</button></div></div>
+            	<div class='row addPointLine justify-content-center'><div class="col-2"><button data-point=-10 type="button" class="btn addPointButton btn-danger">-10</button></div><div class="col-2"><button data-point=10 type="button" class="btn addPointButton btn-success">10</button></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal Gerer les epreuves -->
+    <div class="modal fade" id="manageEpreuvesModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+          <div class="modal-body">
+            <h5 class="modal-title">Gérer les épreuves</h5>
+            <br>
+            <div class="row">
+              <div class="col-4">
+                <button id="newEpreuveButton" type="button" class="btn btn-success btn-sm w-100 mb-2">+ Nouvelle épreuve</button>
+                <input type="text" class="form-control form-control-sm" id="epreuveSearchInput" placeholder="🔎 Rechercher une épreuve...">
+                <div id="epreuvesList" class="epreuvesList"></div>
+              </div>
+              <div class="col-8">
+                <div id="epreuveForm" hidden>
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <label class="form-label">Nom</label>
+                      <input type="text" class="form-control form-control-sm" id="epreuveNameInput">
+                    </div>
+                    <div class="col-3">
+                      <label class="form-label">Type de réponse</label>
+                      <select class="form-select form-select-sm" id="epreuveResponseTypeInput">
+                        <option value="buzzer">Buzzer</option>
+                        <option value="qcm">QCM</option>
+                        <option value="direct">Réponse directe</option>
+                      </select>
+                    </div>
+                    <div class="col-3">
+                      <label class="form-label">Points par défaut</label>
+                      <input type="number" class="form-control form-control-sm" id="epreuveDefaultPointsInput" value="10">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label d-block">Catégorie</label>
+                      <div class="btn-group" role="group" style="flex-wrap: wrap; row-gap: 4px;">
+                        <input type="radio" class="btn-check" name="epreuveCategoryRadio" id="epreuveCategoryCinema" value="cinema" autocomplete="off" checked>
+                        <label class="btn btn-outline-secondary btn-sm" for="epreuveCategoryCinema">🎬 Cinéma</label>
+                        <input type="radio" class="btn-check" name="epreuveCategoryRadio" id="epreuveCategoryMusique" value="musique" autocomplete="off">
+                        <label class="btn btn-outline-secondary btn-sm" for="epreuveCategoryMusique">🎵 Musique</label>
+                        <input type="radio" class="btn-check" name="epreuveCategoryRadio" id="epreuveCategoryCultureG" value="culture_g" autocomplete="off">
+                        <label class="btn btn-outline-secondary btn-sm" for="epreuveCategoryCultureG">🧠 Culture G</label>
+                        <input type="radio" class="btn-check" name="epreuveCategoryRadio" id="epreuveCategoryCultureE" value="culture_e" autocomplete="off">
+                        <label class="btn btn-outline-secondary btn-sm" for="epreuveCategoryCultureE">🌍 Culture E</label>
+                      </div>
+                    </div>
+                    <div class="col-12 form-check mt-1">
+                      <input type="checkbox" class="form-check-input" id="epreuveTimerEnabledInput">
+                      <label class="form-check-label" for="epreuveTimerEnabledInput">Limiter le temps pour buzzer</label>
+                    </div>
+                    <div class="col-4" id="epreuveTimerSecondsBlock" hidden>
+                      <label class="form-label">Durée (secondes)</label>
+                      <input type="number" min="1" class="form-control form-control-sm" id="epreuveTimerSecondsInput" value="30">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Consigne <span class="text-muted">(jamais visible des joueurs ni du display)</span></label>
+                      <textarea class="form-control form-control-sm" id="epreuveHostNoteInput" rows="2"></textarea>
+                    </div>
+                  </div>
+                  <button id="saveEpreuveButton" type="button" class="btn btn-primary btn-sm mt-2">Enregistrer l'épreuve</button>
+                  <button id="deleteEpreuveButton" type="button" class="btn btn-outline-danger btn-sm mt-2">Supprimer l'épreuve</button>
+                  <hr>
+                  <h6>Questions</h6>
+                  <div id="questionsList" class="questionsList"></div>
+                  <div id="questionForm" class="questionForm">
+                    <h6 id="questionFormTitle">Nouvelle question</h6>
+                    <label class="form-label">Texte</label>
+                    <textarea class="form-control form-control-sm" id="questionTextInput" rows="2"></textarea>
+                    <div id="qcmOptionsBlock" hidden>
+                      <label class="form-label mt-1">Options QCM (une par ligne)</label>
+                      <textarea class="form-control form-control-sm" id="qcmOptionsInput" rows="3"></textarea>
+                      <label class="form-label mt-1">Index de la bonne réponse (0 = première ligne)</label>
+                      <input type="number" min="0" class="form-control form-control-sm" id="qcmCorrectIndexInput">
+                    </div>
+                    <label class="form-label mt-1">Image(s) <span class="text-muted">(laisser vide pour garder les images actuelles)</span></label>
+                    <input type="file" class="form-control form-control-sm" id="questionImagesInput" accept="image/*" multiple>
+                    <div id="questionImagesPreview" class="questionImagesPreview text-muted small"></div>
+                    <label class="form-label mt-1">Audio <span class="text-muted">(laisser vide pour garder l'audio actuel)</span></label>
+                    <input type="file" class="form-control form-control-sm" id="questionAudioInput" accept="audio/*">
+                    <div id="questionAudioCurrent" class="text-muted small"></div>
+                    <label class="form-label mt-1">Vidéo <span class="text-muted">(laisser vide pour garder la vidéo actuelle)</span></label>
+                    <input type="file" class="form-control form-control-sm" id="questionVideoInput" accept="video/*">
+                    <div id="questionVideoCurrent" class="text-muted small"></div>
+                    <label class="form-label mt-1">Réponse <span class="text-muted">(jamais visible des joueurs ni du display)</span></label>
+                    <textarea class="form-control form-control-sm" id="questionHostNoteInput" rows="2"></textarea>
+                    <label class="form-label mt-1">Indice / anecdote <span class="text-muted">(optionnel, jamais visible des joueurs ni du display)</span></label>
+                    <textarea class="form-control form-control-sm" id="questionHintInput" rows="2"></textarea>
+                    <button id="saveQuestionButton" type="button" class="btn btn-primary btn-sm mt-2">Ajouter la question</button>
+                    <button id="cancelEditQuestionButton" type="button" class="btn btn-outline-secondary btn-sm mt-2" hidden>Annuler la modification</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal Gerer les scenarios -->
+    <div class="modal fade" id="manageScenariosModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+          <div class="modal-body">
+            <h5 class="modal-title">Gérer les scénarios</h5>
+            <br>
+            <div class="row">
+              <div class="col-4">
+                <button id="newScenarioButton" type="button" class="btn btn-success btn-sm w-100 mb-2">+ Nouveau scénario</button>
+                <div id="scenariosList" class="epreuvesList"></div>
+              </div>
+              <div class="col-8">
+                <div id="scenarioForm" hidden>
+                  <label class="form-label">Nom du scénario</label>
+                  <input type="text" class="form-control form-control-sm" id="scenarioNameInput">
+                  <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="scenarioShowMenuOnDisplayInput" checked>
+                    <label class="form-check-label" for="scenarioShowMenuOnDisplayInput">Afficher le menu des épreuves sur le display <span class="text-muted">(sinon réservé au gestionnaire)</span></label>
+                  </div>
+                  <fieldset class="scenarioVoteBox mt-3">
+                    <legend>Vote de l'épreuve suivante</legend>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="scenarioVoteAutoInput">
+                      <label class="form-check-label" for="scenarioVoteAutoInput">Proposer le vote automatiquement après chaque épreuve <span class="text-muted">(sinon, l'animateur le lance à la demande)</span></label>
+                    </div>
+                    <div class="row g-2 mt-1">
+                      <div class="col-6">
+                        <label class="form-label small mb-0" for="scenarioVoteCountInput">Épreuves proposées</label>
+                        <select id="scenarioVoteCountInput" class="form-select form-select-sm">
+                          <option value="0">Toutes les restantes</option>
+                          <option value="2">2 tirées au hasard</option>
+                          <option value="3">3 tirées au hasard</option>
+                          <option value="4">4 tirées au hasard</option>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label class="form-label small mb-0" for="scenarioVoteDurationInput">Durée (secondes, 0 = clôture manuelle)</label>
+                        <input type="number" min="0" max="600" class="form-control form-control-sm" id="scenarioVoteDurationInput" value="30">
+                      </div>
+                    </div>
+                    <div class="form-check mt-2">
+                      <input class="form-check-input" type="checkbox" id="scenarioVoteLiveInput">
+                      <label class="form-check-label" for="scenarioVoteLiveInput">Montrer les votes en direct <span class="text-muted">(sinon secrets jusqu'au résultat)</span></label>
+                    </div>
+                    <div class="form-check mt-1">
+                      <input class="form-check-input" type="checkbox" id="scenarioVoteAutoLaunchInput">
+                      <label class="form-check-label" for="scenarioVoteAutoLaunchInput">Lancer automatiquement l'épreuve gagnante <span class="text-muted">(sinon l'animateur clique « Lancer »)</span></label>
+                    </div>
+                  </fieldset>
+                  <button id="saveScenarioButton" type="button" class="btn btn-primary btn-sm mt-2">Enregistrer le scénario</button>
+                  <button id="deleteScenarioButton" type="button" class="btn btn-outline-danger btn-sm mt-2">Supprimer le scénario</button>
+                  <hr>
+                  <div class="row">
+                    <div class="col-6">
+                      <h6>Épreuves disponibles</h6>
+                      <div id="availableEpreuvesList" class="questionsList"></div>
+                    </div>
+                    <div class="col-6">
+                      <h6>Épreuves du scénario (ordre)</h6>
+                      <div id="chosenEpreuvesList" class="questionsList"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal Message display -->
+    <div class="modal fade" id="displayMessageModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-body">
+            <h5 class="modal-title">Message sur le display</h5>
+            <p class="text-muted small">Écran d'attente, pause, annonce... combinez librement texte, image, vidéo et compte à rebours.</p>
+            <label class="form-label mt-2">Texte</label>
+            <textarea class="form-control form-control-sm" id="displayMessageTextInput" rows="2"></textarea>
+            <label class="form-label mt-2">Image <span class="text-muted">(remplace la précédente)</span></label>
+            <input type="file" class="form-control form-control-sm" id="displayMessageImageInput" accept="image/*">
+            <label class="form-label mt-2">Vidéo <span class="text-muted">(remplace la précédente)</span></label>
+            <input type="file" class="form-control form-control-sm" id="displayMessageVideoInput" accept="video/*">
+            <label class="form-label mt-2">Compte à rebours (secondes, vide = aucun)</label>
+            <input type="number" min="1" class="form-control form-control-sm" id="displayMessageCountdownInput">
+          </div>
+          <div class="modal-footer">
+            <button id="clearDisplayMessageButton" type="button" class="btn btn-outline-danger">Effacer le message</button>
+            <button id="showDisplayMessageButton" type="button" class="btn btn-primary">Afficher sur le display</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal Historique des parties -->
+    <div class="modal fade" id="gameHistoryModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-body">
+            <h5 class="modal-title">Historique des parties</h5>
+            <br>
+            <div id="gameHistoryList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="qrcode.min.js"></script>
+    <script src="socket.io.min.js"></script>
+    <script src="jquery.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm" crossorigin="anonymous"></script>
+    <script src="main.js"></script>
+	</body>
+</html>
