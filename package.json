@@ -1,0 +1,21 @@
+{
+  "name": "the-big-team-quiz",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Quiz en direct pour team building : l'animateur pilote, les équipes buzzent au téléphone.",
+  "main": "server/server.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server/server.js",
+    "postinstall": "npm install --omit=dev --prefix server"
+  },
+  "gateway": {
+    "route": "quiz",
+    "name": "The Big Team Quiz",
+    "description": "Quiz en direct pour team building : l'animateur pilote, les équipes buzzent au téléphone.",
+    "color": "#E0701F",
+    "tags": ["temps réel"]
+  }
+}
