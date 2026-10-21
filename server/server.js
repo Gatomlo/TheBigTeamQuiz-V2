@@ -524,6 +524,7 @@ function freshRound() {
     answerDeadlineAt: null,      // timestamp au-dela duquel le deblocage auto se declenche
     reflectionEndsAt: null,       // fin du temps imparti pour buzzer (epreuve.timer_enabled), avant verrouillage auto
     reflectionRemainingMs: null,   // temps restant memorise pendant qu'une equipe repond (timer en pause)
+    awaitingMediaStart: false,      // question avec piste : le decompte attend que la piste joue reellement (voir media-started)
     startedAt: 0,
     lastResult: null   // { team, correct, points, ts, timeout } - dernier resultat de buzz annonce, affiche brievement sur le display
   };
@@ -532,12 +533,14 @@ function freshRound() {
 let round = freshRound();
 let answerDeadlineTimer = null;
 let reflectionTimer = null;
+let mediaStartFallbackTimer = null; // demarre quand meme le decompte si aucun ecran ne confirme la lecture de la piste
 
 function clearAnswerDeadlineTimer() {
   if (answerDeadlineTimer) { clearTimeout(answerDeadlineTimer); answerDeadlineTimer = null; }
 }
 function clearReflectionTimer() {
   if (reflectionTimer) { clearTimeout(reflectionTimer); reflectionTimer = null; }
+  if (mediaStartFallbackTimer) { clearTimeout(mediaStartFallbackTimer); mediaStartFallbackTimer = null; }
 }
 
 // Timer optionnel (par epreuve) qui limite le temps disponible pour buzzer.
@@ -566,6 +569,7 @@ function pauseReflectionTimer() {
   clearReflectionTimer();
 }
 function resumeReflectionTimer() {
+  round.awaitingMediaStart = false;
   if (round.reflectionRemainingMs != null) {
     const ms = round.reflectionRemainingMs;
     round.reflectionRemainingMs = null;
@@ -849,7 +853,25 @@ function openCurrentQuestion() {
     round.open = true;
     round.startedAt = Date.now();
     if (info.timerEnabled && info.timerSeconds > 0) {
-      startReflectionTimer(info.timerSeconds * 1000);
+      const ms = info.timerSeconds * 1000;
+      const hasMedia = !!(info.question && (info.question.audio_path || info.question.video_path));
+      if (hasMedia) {
+        // Le chargement et le demarrage d'une piste prennent 1 a 2 s : demarrer le decompte tout de suite
+        // le decalait par rapport a la musique (30 s de decompte pour une piste arrivee a 28 s). On le
+        // garde donc "en pause" a sa duree pleine jusqu'a ce que l'ecran qui joue le son signale que la
+        // lecture a vraiment commence (media-started), ou, au pire, 5 s apres (aucun ecran n'a pu jouer).
+        round.reflectionRemainingMs = ms;
+        round.awaitingMediaStart = true;
+        mediaStartFallbackTimer = setTimeout(() => {
+          mediaStartFallbackTimer = null;
+          if (round.awaitingMediaStart && !round.activeTeam && game.mediaPlaying) {
+            resumeReflectionTimer();
+            broadcastState();
+          }
+        }, 5000);
+      } else {
+        startReflectionTimer(ms);
+      }
     }
   } else {
     round = freshRound(); // non utilise pour qcm/direct, garde l'etat propre
@@ -1333,6 +1355,14 @@ io.on('connection', (socket) => {
   // Envoye UNIQUEMENT par l'ecran gestionnaire (le display n'a aucun controle) pour
   // demarrer/mettre en pause la piste audio/video de la question courante ; diffuse
   // a tous les ecrans pour qu'ils restent synchronises (voir syncMediaPlayback cote client).
+  // Envoye par l'ecran qui joue le son (display, ou gestionnaire seul) quand la piste/video de la
+  // question joue REELLEMENT : c'est alors que le decompte pour buzzer demarre, aligne sur la musique.
+  socket.on('media-started', () => {
+    if (!round.awaitingMediaStart || !game.mediaPlaying || round.activeTeam) return;
+    resumeReflectionTimer();
+    broadcastState();
+  });
+
   socket.on('set-media-playing', (playing) => {
     if (typeof playing !== 'boolean') return;
     game.mediaPlaying = playing;

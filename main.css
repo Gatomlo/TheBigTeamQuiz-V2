@@ -780,7 +780,10 @@ a {
 .displayQrOverlay{
   position: fixed;
   inset: 0;
-  z-index: 3000;
+  /* Toujours au premier plan sur le projecteur : au-dessus du vote, du classement, des messages,
+     du bandeau de resultat et du chrono. Sans clic possible (pointer-events: none ci-dessous), donc
+     un clic sur l'ecran traverse jusqu'a l'invite d'activation du son si elle est encore affichee. */
+  z-index: 9000;
   background: rgba(20,33,61,0.96);
   display: none;
   align-items: center;
@@ -1363,10 +1366,13 @@ body.mode-control .i{width:1.15em;height:1.15em;stroke:currentColor;fill:none;st
 body.mode-control button:focus-visible,body.mode-control input:focus-visible,body.mode-control select:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 
 /* ---- coque : barre laterale cuir + contenu ---- */
+/* Pleine page : la coque occupe toute la largeur et au moins toute la hauteur de la fenetre
+   (sous la banniere du mode repetition quand elle est affichee). */
+body.mode-control{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
 body.mode-control .mainContainer{
-  margin:16px auto;max-width:1560px;width:calc(100% - 32px);padding:0;
+  margin:0;max-width:none;width:100%;flex:1 1 auto;padding:0;
   display:grid;grid-template-columns:252px minmax(0,1fr);
-  border:1px solid var(--line);border-radius:22px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden;
+  border:0;border-radius:0;background:var(--surface);box-shadow:none;
 }
 body.mode-control .mainc{min-width:0}
 body.mode-control .bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
@@ -1480,11 +1486,9 @@ body.mode-control .questionText{font-size:1.7em;font-weight:700;line-height:1.15
 body.mode-control .empty,
 body.mode-control #controlMenuHint{padding:18px;border-radius:16px;border:1px dashed var(--line);text-align:center;color:var(--muted);font-size:14px}
 body.mode-control #questionHostNote.questionHostNote{display:flex;flex-direction:column;gap:8px;background:none;border:0;padding:0;margin:0;font-style:normal;white-space:normal}
-body.mode-control .nrow{display:grid;grid-template-columns:112px minmax(0,1fr) auto;gap:10px;align-items:start;padding:11px 13px;border-radius:12px;background:var(--surface);border:1px solid var(--line);font-size:14px}
+body.mode-control .nrow{display:grid;grid-template-columns:112px minmax(0,1fr);gap:10px;align-items:start;padding:11px 13px;border-radius:12px;background:var(--surface);border:1px solid var(--line);font-size:14px}
 body.mode-control .nrow label{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sand);font-weight:700;padding-top:2px;margin:0}
 body.mode-control .nrow .txt{min-width:0;white-space:pre-wrap}
-body.mode-control .nrow .blur{filter:blur(6px);user-select:none;transition:filter .2s}
-body.mode-control .nrow .reveal{font-size:12.5px;font-weight:700;color:var(--teal);padding:2px 6px;background:none;border:0}
 body.mode-control .answerRow{background:var(--surface);color:var(--fg);border:1px solid var(--line)}
 body.mode-control .preflightChecklist .preflightOk{color:var(--good)}
 body.mode-control .preflightChecklist .preflightWarn{color:var(--bad)}
@@ -1571,7 +1575,6 @@ body.mode-control .modal-title{font-weight:700}
 @media (max-width:760px){
   body.mode-control .panelsRow{grid-template-columns:minmax(0,1fr)}
   body.mode-control .nrow{grid-template-columns:minmax(0,1fr)}
-  body.mode-control .mainContainer{width:calc(100% - 16px);margin:8px auto;border-radius:16px}
 }
 
 /* ---- l'ecran d'affichage ignore toute la coque de gestion ---- */
@@ -1650,3 +1653,24 @@ body.mode-control .voteSetupEpreuves{ display: flex; flex-direction: column; gap
 body.mode-control .voteSetupRow{ display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; cursor: pointer; font-size: 14px; margin: 0; }
 body.mode-control .voteSetupRow:hover{ background: var(--surface-2); }
 body.mode-control .voteOptHead .reveal{font-size:12.5px;font-weight:700;color:var(--teal);background:none;border:0;padding:2px 6px;cursor:pointer}
+
+/* ---- Menu de l'ecran gestionnaire (bouton a cote du nombre de telephones) ---- */
+body.mode-control .menuWrap{position:relative}
+body.mode-control .menuBtn{display:inline-flex;align-items:center;gap:8px;padding:6px 13px;border:1px solid var(--line);border-radius:99px;background:var(--surface);color:var(--fg);font:600 13px var(--f-body);cursor:pointer}
+body.mode-control .menuBtn:hover,body.mode-control .menuBtn[aria-expanded="true"]{border-color:var(--teal)}
+body.mode-control .appMenu{position:absolute;right:0;top:calc(100% + 8px);z-index:40;min-width:270px;max-width:calc(100vw - 32px);padding:8px;border-radius:16px;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:4px}
+body.mode-control .appMenu[hidden]{display:none}
+body.mode-control .menuGroup{display:flex;flex-direction:column;gap:2px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+body.mode-control .menuGroup:last-child{border-bottom:0;padding-bottom:0}
+body.mode-control .appMenu .sact{color:var(--fg);padding:10px 12px}
+body.mode-control .appMenu #managerLogoutButton{color:var(--bad)}
+body.mode-control .appMenu .sact:hover,body.mode-control .appMenu .sact:focus-visible{background:var(--surface-2)}
+body.mode-control .appMenu .sw input{background:var(--line)}
+body.mode-control .appMenu .sw input:checked{background:var(--teal)}
+body.mode-control .appMenu kbd{background:var(--surface-2);border-color:var(--line);color:var(--muted)}
+body.mode-display .menuWrap{display:none !important}
+
+/* Les colonnes de travail remplissent toute la hauteur disponible sous la barre du haut. */
+body.mode-control .mainc{display:flex;flex-direction:column}
+body.mode-control .panelsRow{flex:1 1 auto}
+body.mode-control .sideCol .joinCollect{flex:1 1 auto}

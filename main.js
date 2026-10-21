@@ -776,7 +776,10 @@ function syncMediaPlayback(state){
     if(!el || !el.src) return;
     el.muted = !audible;
   });
-  if(!audible) return;
+  // Meme quand cet ecran n'est pas celui qui joue le son (un display est connecte), on garde le
+  // lecteur du gestionnaire en lecture COUPEE et synchronisee avec l'etat serveur : sa barre de
+  // progression avance, et ses boutons pause / deplacement pilotent le display. Sans cela il restait
+  // a l'arret et l'animateur ne pouvait ni mettre en pause ni deplacer la piste depuis le gestionnaire.
   var shouldPlay = !!game.mediaPlaying && !state.round.activeTeam;
   var isNewSeek = lastAppliedMediaSeekToken !== null && game.mediaSeekToken !== lastAppliedMediaSeekToken;
   lastAppliedMediaSeekToken = game.mediaSeekToken;
@@ -794,6 +797,15 @@ function syncMediaPlayback(state){
 $( "#displayAudioUnlockOverlay" ).on( "click", function(){
   $(this).prop('hidden', true);
   if(lastBuzzState) syncMediaPlayback(lastBuzzState);
+});
+
+// L'ecran qui joue le son signale au serveur que la piste joue REELLEMENT : le decompte pour buzzer
+// (voir awaitingMediaStart cote serveur) demarre alors, aligne sur la musique et non sur l'ouverture
+// de la question.
+$('#questionAudio, #questionVideo').on('playing', function(){
+  if(!buzzSocket || !lastBuzzState || !lastBuzzState.round || !lastBuzzState.round.awaitingMediaStart) return;
+  if(!isPrimaryMediaScreen(lastBuzzState)) return;
+  buzzSocket.emit('media-started');
 });
 
 // Cote gestionnaire uniquement : les controles natifs restent la facon de
@@ -1025,7 +1037,7 @@ function renderControlTimer(state){
       var frozen = round.reflectionRemainingMs / 1000;
       num = Math.ceil(frozen) + ' s';
       fraction = Math.min(1, frozen / totalReflection);
-      label = 'temps de réflexion en pause';
+      label = round.awaitingMediaStart ? 'démarre avec la piste' : 'temps de réflexion en pause';
     } else if(round.open){
       num = '●';
       label = 'En attente d\'un buzz';
@@ -1568,12 +1580,7 @@ function showIdleCard(mainMessage, subMessage, showQr){
   }
 }
 
-var revealedHostNotes = {};
 var lastHostNoteKey = '';
-$(document).on('click', '#questionHostNote .reveal', function(){
-  revealedHostNotes[$(this).data('note-key')] = true;
-  if(lastBuzzState) renderQuestionContent(lastBuzzState);
-});
 
 function renderQuestionContent(state){
   var game = state.game;
@@ -1647,25 +1654,19 @@ function renderQuestionContent(state){
   // Notes reservees a l'animateur (consigne d'epreuve + reponse/anecdote de la
   // question) : jamais affichees sur le display, meme si elles transitent dans
   // le meme etat (voir renderAnswersReceived plus bas pour la meme logique).
-  // Une ligne par note (Consigne visible, Reponse et Indice floutees tant que
-  // l'animateur ne clique pas "Reveler", pour pouvoir partager l'ecran sans
-  // spoiler). Reconstruit seulement si le contenu change, et l'etat "revele"
-  // est memorise par question pour survivre aux broadcasts du serveur.
+  // Une ligne par note (Consigne, Reponse, Indice), toujours visibles : cet ecran n'est jamais
+  // montre aux joueurs. Reconstruit seulement si le contenu change.
   var hostNoteRows = [];
-  if(game.current.hostNote) hostNoteRows.push({ id: 'consigne', label: 'Consigne', text: game.current.hostNote, secret: false });
-  if(q.host_note) hostNoteRows.push({ id: 'reponse', label: 'Réponse', text: q.host_note, secret: true });
-  if(q.hint) hostNoteRows.push({ id: 'indice', label: 'Indice / anecdote', text: q.hint, secret: true });
+  if(game.current.hostNote) hostNoteRows.push({ label: 'Consigne', text: game.current.hostNote });
+  if(q.host_note) hostNoteRows.push({ label: 'Réponse', text: q.host_note });
+  if(q.hint) hostNoteRows.push({ label: 'Indice / anecdote', text: q.hint });
   if(APP_MODE === 'control' && hostNoteRows.length){
     var noteQuestionKey = game.current.epreuveIndex + '-' + game.current.questionIndex;
-    var noteKey = noteQuestionKey + '|' + JSON.stringify(hostNoteRows) + '|' + Object.keys(revealedHostNotes).join(',');
+    var noteKey = noteQuestionKey + '|' + JSON.stringify(hostNoteRows);
     if(noteKey !== lastHostNoteKey){
       lastHostNoteKey = noteKey;
       $('#questionHostNote').html(hostNoteRows.map(function(row){
-        var revealed = !row.secret || revealedHostNotes[noteQuestionKey + ':' + row.id];
-        return '<div class="nrow"><label>' + row.label + '</label>' +
-          '<span class="txt' + (revealed ? '' : ' blur') + '">' + escapeHtml(row.text) + '</span>' +
-          (row.secret && !revealed ? '<button type="button" class="reveal" data-note-key="' + noteQuestionKey + ':' + row.id + '">Révéler</button>' : '<span></span>') +
-          '</div>';
+        return '<div class="nrow"><label>' + row.label + '</label><span class="txt">' + escapeHtml(row.text) + '</span></div>';
       }).join(''));
     }
     $('#questionHostNote').prop('hidden', false);
@@ -1862,6 +1863,35 @@ function autoFullscreenOnGesture(gameStartingNow){
     if(ok) showToast('Plein écran activé. Vous pouvez le désactiver avec « Plein écran automatique » dans la barre latérale.', 'success');
   });
 }
+// ---- Menu de l'ecran gestionnaire (a cote du nombre de telephones connectes) ----
+// Ouvre/ferme le menu ; se ferme au clic ailleurs, sur Echap, et apres le choix d'une action
+// (les interrupteurs "Mode repetition" / "Plein ecran" le laissent ouvert pour voir leur etat).
+function setAppMenuOpen(open){
+  $('#appMenu').prop('hidden', !open);
+  $('#appMenuButton').attr('aria-expanded', String(open));
+}
+if(APP_MODE === 'control'){
+  $('#appMenuButton').on('click', function(e){
+    e.stopPropagation();
+    var willOpen = $('#appMenu').prop('hidden');
+    setAppMenuOpen(willOpen);
+    if(willOpen) $('#appMenu .sact').filter(':visible').first().trigger('focus');
+  });
+  $(document).on('click', function(e){
+    if($('#appMenu').prop('hidden')) return;
+    var $target = $(e.target);
+    if($target.closest('#appMenuButton').length) return;
+    // clic sur une action (bouton) : on ferme ; clic sur un interrupteur ou dans le vide du menu : on laisse ouvert
+    if($target.closest('#appMenu button.sact').length || !$target.closest('#appMenu').length) setAppMenuOpen(false);
+  });
+  $(document).on('keydown', function(e){
+    if(e.key === 'Escape' && !$('#appMenu').prop('hidden')){
+      setAppMenuOpen(false);
+      $('#appMenuButton').trigger('focus');
+    }
+  });
+}
+
 if(APP_MODE === 'control'){
   document.addEventListener('click', function(){ autoFullscreenOnGesture(false); }, true);
   if(fsSupported() && fsTouchDevice()){
