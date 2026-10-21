@@ -13,5 +13,13 @@
     "express": "^4.19.2",
     "multer": "^2.3.0",
     "socket.io": "^4.7.5"
+  },
+  "gateway": {
+    "name": "The Big Team Quiz",
+    "description": "Quiz en direct pour team building : l'animateur pilote, les équipes buzzent au téléphone.",
+    "color": "#E0701F",
+    "tags": [
+      "temps réel"
+    ]
   }
 }
