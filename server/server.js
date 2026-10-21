@@ -26,6 +26,30 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Gestionnaire et ecran d'affichage (le front statique a la racine du depot) servis par le quiz lui-meme
+// sous /gestion/ : une seule adresse pour tout (en autonome : /gestion/ ; derriere la passerelle :
+// /quiz/gestion/). LISTE BLANCHE stricte : jamais le code du serveur (server/), la base de donnees ni
+// les fichiers de configuration du depot. Les medias de questions (medias/, pictures/) restent servis.
+const FRONT_ROOT = path.join(__dirname, '..');
+const FRONT_FILES = new Set(['index.html', 'main.js', 'main.css', 'jquery.js', 'qrcode.min.js', 'socket.io.min.js']);
+const FRONT_DIRS = new Set(['pictures', 'medias']);
+app.use('/gestion', (req, res, next) => {
+  // On decide sur le chemin DECODE et NORMALISE : sinon "medias/../server/server.js" (ou sa forme
+  // encodee %2e%2e) passerait la liste blanche sur son premier segment, puis serait resolu par
+  // express.static vers server/ (qui est bien DANS la racine servie).
+  let decoded;
+  try { decoded = decodeURIComponent(req.path); } catch (e) { return res.status(404).send('Not found'); }
+  if (decoded.includes(String.fromCharCode(0)) || decoded.includes(String.fromCharCode(92)) || decoded.split('/').some((seg) => seg === '..' || seg === '.')) {
+    return res.status(404).send('Not found');
+  }
+  const parts = decoded.split('/').filter(Boolean);
+  const allowed = parts.length === 0
+    || (parts.length === 1 && FRONT_FILES.has(parts[0]))
+    || FRONT_DIRS.has(parts[0]);
+  if (!allowed) return res.status(404).send('Not found');
+  next();
+}, express.static(FRONT_ROOT, { index: 'index.html', dotfiles: 'ignore' }));
+
 // ---- Base de donnees (historique des parties + epreuves/scenarios) ----
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);

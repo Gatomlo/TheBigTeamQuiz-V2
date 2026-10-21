@@ -19,7 +19,12 @@
       // Deplace ici, tout en haut (au lieu du bas du fichier), pour que la
       // porte d'entree du gestionnaire ci-dessous puisse s'appuyer dessus des
       // le premier rendu, avant meme le reste du contenu de la page.
-      window.BUZZ_SERVER_URL = new URLSearchParams(location.search).get('buzz') || "http://10.0.0.98:3000"; // A adapter apres deploiement du serveur Node (voir server/README.md)
+      // Adresse du serveur : ?buzz=... en priorite ; sinon, si cette page est servie par le quiz lui-meme sous
+      // <prefixe>/gestion/ (voir server.js), le serveur est a <prefixe> sur la meme origine ; sinon l'ancienne valeur.
+      window.BUZZ_SERVER_URL = new URLSearchParams(location.search).get('buzz') || (function () {
+        var m = location.pathname.match(/^(.*)\/gestion\/(?:index\.html)?$/);
+        return m ? location.origin + m[1] : "http://10.0.0.98:3000";
+      })(); // A adapter apres deploiement du serveur Node (voir server/README.md)
       window.APP_MODE = new URLSearchParams(location.search).get('mode') === 'display' ? 'display' : 'control';
     </script>
     <div id="managerLoginGate" class="managerLoginGate" hidden>

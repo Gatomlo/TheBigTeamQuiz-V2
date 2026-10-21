@@ -271,6 +271,10 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 
 .scoreboardRow.myTeamRow { background: var(--teal-soft); border: 2px solid var(--teal); }
 
+/* Lien discret vers l'espace animateur (ecran de choix d'equipe uniquement) */
+.hostLink { display: block; margin-top: 36px; font-size: .78rem; color: var(--muted); opacity: .6; text-decoration: none; }
+.hostLink:hover, .hostLink:focus-visible { opacity: 1; text-decoration: underline; }
+
 /* Vote de l'epreuve suivante */
 #voteBlock { margin-top: 8px; }
 .voteTimer { font: 700 2.4rem/1 var(--f-display); color: var(--sand); margin: 4px 0 0; min-height: 1em; font-variant-numeric: tabular-nums; }
