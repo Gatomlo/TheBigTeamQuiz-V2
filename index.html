@@ -209,6 +209,11 @@
                 <div id="questionAudioPlaceholder" class="questionAudioPlaceholder" hidden></div>
                 <audio id="questionAudio" hidden></audio>
                 <video id="questionVideo" hidden></video>
+                <div id="questionEmbedBar" class="questionEmbedBar" hidden>
+                  <span id="questionEmbedLabel"></span>
+                  <button id="questionEmbedToggle" type="button" class="btn btn-outline-secondary btn-sm">⏯</button>
+                </div>
+                <div id="questionEmbedHost" class="questionEmbedHost" aria-hidden="true"><div id="questionEmbedPlayer"></div></div>
                 <div id="qcmDirectPanel" hidden>
                   <div id="answersReceivedList"></div>
                 </div>
@@ -503,6 +508,33 @@
             <div class="row">
               <div class="col-4">
                 <button id="newEpreuveButton" type="button" class="btn btn-success btn-sm w-100 mb-2">+ Nouvelle épreuve</button>
+                <button id="togglePlaylistImportButton" type="button" class="btn btn-outline-success btn-sm w-100 mb-2">🎵 Importer une playlist</button>
+                <div id="playlistImportBlock" class="border rounded p-2 mb-2" hidden>
+                  <input type="url" class="form-control form-control-sm mb-1" id="playlistUrlInput" placeholder="Lien de playlist YouTube ou Spotify">
+                  <input type="text" class="form-control form-control-sm mb-1" id="playlistNameInput" placeholder="Nom de l'épreuve (optionnel)">
+                  <div class="row g-1 mb-1">
+                    <div class="col-6">
+                      <select class="form-select form-select-sm" id="playlistTypeInput" title="Type de réponse">
+                        <option value="buzzer">Buzzer</option>
+                        <option value="qcm">QCM auto</option>
+                        <option value="direct">Réponse directe</option>
+                      </select>
+                    </div>
+                    <div class="col-6">
+                      <select class="form-select form-select-sm" id="playlistStartInput" title="Début de lecture (YouTube)">
+                        <option value="zero">Début du morceau</option>
+                        <option value="random">Départ aléatoire</option>
+                        <option value="30">À 30 s</option>
+                      </select>
+                    </div>
+                    <div class="col-4"><input type="number" min="1" class="form-control form-control-sm" id="playlistLimitInput" placeholder="Max titres" title="Nombre max de morceaux"></div>
+                    <div class="col-4"><input type="number" min="5" class="form-control form-control-sm" id="playlistTimerInput" value="30" title="Durée par morceau (s)"></div>
+                    <div class="col-4"><input type="number" min="1" class="form-control form-control-sm" id="playlistPointsInput" value="10" title="Points par morceau"></div>
+                  </div>
+                  <div class="form-check small"><input class="form-check-input" type="checkbox" id="playlistShuffleInput" checked><label class="form-check-label" for="playlistShuffleInput">Mélanger l'ordre</label></div>
+                  <button id="importPlaylistButton" type="button" class="btn btn-success btn-sm w-100 mt-1">Générer l'épreuve</button>
+                  <div class="text-muted small mt-1">Une question par morceau ; la réponse (artiste — titre) est pour l'animateur uniquement.</div>
+                </div>
                 <input type="text" class="form-control form-control-sm" id="epreuveSearchInput" placeholder="🔎 Rechercher une épreuve...">
                 <div id="epreuvesList" class="epreuvesList"></div>
               </div>
@@ -575,6 +607,11 @@
                     <label class="form-label mt-1">Vidéo <span class="text-muted">(laisser vide pour garder la vidéo actuelle)</span></label>
                     <input type="file" class="form-control form-control-sm" id="questionVideoInput" accept="video/*">
                     <div id="questionVideoCurrent" class="text-muted small"></div>
+                    <label class="form-label mt-1">Lien YouTube / Spotify <span class="text-muted">(morceau joué par le lecteur intégré, sans afficher la vidéo)</span></label>
+                    <div class="row g-2">
+                      <div class="col-9"><input type="url" class="form-control form-control-sm" id="questionMediaUrlInput" placeholder="https://www.youtube.com/watch?v=… ou https://open.spotify.com/track/…"></div>
+                      <div class="col-3"><input type="number" min="0" class="form-control form-control-sm" id="questionMediaStartInput" placeholder="Début (s)" title="Début de lecture en secondes (YouTube)"></div>
+                    </div>
                     <label class="form-label mt-1">Réponse <span class="text-muted">(jamais visible des joueurs ni du display)</span></label>
                     <textarea class="form-control form-control-sm" id="questionHostNoteInput" rows="2"></textarea>
                     <label class="form-label mt-1">Indice / anecdote <span class="text-muted">(optionnel, jamais visible des joueurs ni du display)</span></label>

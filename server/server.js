@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const express = require('express');
 const http = require('http');
 const multer = require('multer');
+const playlist = require('./playlist');
 const { Server } = require('socket.io');
 const { DatabaseSync } = require('node:sqlite'); // module natif Node (>= 22.5), zero dependance npm
 
@@ -126,6 +127,8 @@ ensureColumn('epreuves', 'timer_enabled', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('epreuves', 'timer_seconds', 'INTEGER NOT NULL DEFAULT 30');
 ensureColumn('epreuves', 'host_note', 'TEXT');
 ensureColumn('questions', 'host_note', 'TEXT');
+ensureColumn('questions', 'media_url', 'TEXT'); // lien YouTube/Spotify joue via lecteur integre (voir playlist.js)
+ensureColumn('questions', 'media_start', 'INTEGER'); // debut de lecture en secondes (YouTube)
 ensureColumn('questions', 'hint', 'TEXT'); // indice/anecdote, distinct de host_note (la reponse)
 ensureColumn('scenarios', 'show_menu_on_display', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('scenarios', 'vote_settings', 'TEXT'); // JSON : reglages par defaut du vote de l'epreuve suivante (voir normalizeVoteSettings)
@@ -192,8 +195,8 @@ const deleteScenarioEpreuvesForEpreuveStmt = db.prepare('DELETE FROM scenario_ep
 
 const listQuestionsForEpreuveStmt = db.prepare('SELECT * FROM questions WHERE epreuve_id=? ORDER BY order_index');
 const nextOrderIndexStmt = db.prepare('SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM questions WHERE epreuve_id=?');
-const insertQuestionStmt = db.prepare('INSERT INTO questions (epreuve_id, order_index, text, images, audio_path, video_path, qcm_options, qcm_correct_index, host_note, hint) VALUES (?,?,?,?,?,?,?,?,?,?)');
-const updateQuestionStmt = db.prepare('UPDATE questions SET text=?, images=?, audio_path=?, video_path=?, qcm_options=?, qcm_correct_index=?, host_note=?, hint=? WHERE id=?');
+const insertQuestionStmt = db.prepare('INSERT INTO questions (epreuve_id, order_index, text, images, audio_path, video_path, qcm_options, qcm_correct_index, host_note, hint, media_url, media_start) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+const updateQuestionStmt = db.prepare('UPDATE questions SET text=?, images=?, audio_path=?, video_path=?, qcm_options=?, qcm_correct_index=?, host_note=?, hint=?, media_url=?, media_start=? WHERE id=?');
 const updateQuestionOrderStmt = db.prepare('UPDATE questions SET order_index=? WHERE id=?');
 const getQuestionStmt = db.prepare('SELECT * FROM questions WHERE id=?');
 const deleteQuestionStmt = db.prepare('DELETE FROM questions WHERE id=?');
@@ -205,6 +208,63 @@ function parseQuestionRow(q) {
     qcm_options: q.qcm_options ? JSON.parse(q.qcm_options) : null
   };
 }
+
+
+// Lien YouTube/Spotify d'une question : normalise en lien canonique, ou null si absent/invalide.
+function normalizeMedia(url, start) {
+  const p = url ? playlist.parseMediaUrl(url) : null;
+  if (!p || (p.kind === 'playlist' || p.kind === 'album')) return { url: null, start: null };
+  return { url: playlist.canonicalUrl(p), start: p.provider === 'youtube' ? Math.max(0, parseInt(start, 10) || 0) : null };
+}
+
+function shuffled(a) {
+  const r = a.slice();
+  for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; }
+  return r;
+}
+
+// Cree une epreuve complete (une question par morceau) depuis une playlist YouTube ou Spotify.
+// Corps : url, name?, response_type?, default_points?, timer_seconds?, limit?, shuffle?,
+// start ('zero' | 'random' | secondes), question_text?, dry_run? (n'enregistre rien, renvoie les morceaux).
+app.post('/api/import-playlist', async (req, res) => {
+  const b = req.body || {};
+  try {
+    const pl = await playlist.fetchPlaylist(b.url);
+    let tracks = b.shuffle ? shuffled(pl.tracks) : pl.tracks;
+    const limit = Math.min(Math.max(parseInt(b.limit, 10) || 0, 0), 200);
+    if (limit) tracks = tracks.slice(0, limit);
+    if (b.dry_run) return res.json({ name: pl.name, total: pl.tracks.length, tracks });
+    const responseType = ['buzzer', 'qcm', 'direct'].includes(b.response_type) ? b.response_type : 'buzzer';
+    const label = (t) => (t.artist ? t.artist + ' — ' : '') + t.title;
+    const epreuveId = Number(insertEpreuveStmt.run(
+      (b.name || pl.name).toString().slice(0, 120), responseType, 'Musique', Number(b.default_points) || 10,
+      1, Number(b.timer_seconds) || 30, null
+    ).lastInsertRowid);
+    const questionText = (b.question_text || 'Quel est ce morceau ?').toString();
+    tracks.forEach((t, i) => {
+      const p = playlist.parseMediaUrl(t.url);
+      let start = 0;
+      if (p.provider === 'youtube') {
+        if (b.start === 'random' && t.duration > 60) start = Math.floor(t.duration * (0.15 + Math.random() * 0.4));
+        else if (Number(b.start) > 0) start = Math.min(Number(b.start), Math.max(0, (t.duration || 1e9) - 20));
+      }
+      let options = null, correct = null;
+      if (responseType === 'qcm') {
+        const others = shuffled(tracks.filter((o) => o !== t)).slice(0, 3).map(label);
+        options = shuffled([label(t), ...others]);
+        correct = options.indexOf(label(t));
+      }
+      insertQuestionStmt.run(
+        epreuveId, i, questionText, '[]', null, null,
+        options ? JSON.stringify(options) : null, correct,
+        label(t), null, playlist.canonicalUrl(p), p.provider === 'youtube' ? start : null
+      );
+    });
+    res.json({ id: epreuveId, name: pl.name, count: tracks.length });
+  } catch (e) {
+    res.status(400).json({ error: e.message || 'Import impossible' });
+  }
+});
 
 app.get('/api/epreuves', (req, res) => {
   const epreuves = listEpreuvesStmt.all();
@@ -239,25 +299,27 @@ app.delete('/api/epreuves/:id', (req, res) => {
 });
 
 app.post('/api/epreuves/:id/questions', (req, res) => {
-  const { text, images, audio_path, video_path, qcm_options, qcm_correct_index, host_note, hint } = req.body || {};
+  const { text, images, audio_path, video_path, qcm_options, qcm_correct_index, host_note, hint, media_url, media_start } = req.body || {};
+  const media = normalizeMedia(media_url, media_start);
   const orderIndex = nextOrderIndexStmt.get(req.params.id).next;
   const id = insertQuestionStmt.run(
     req.params.id, orderIndex, text || null,
     JSON.stringify(images || []), audio_path || null, video_path || null,
     qcm_options ? JSON.stringify(qcm_options) : null,
     typeof qcm_correct_index === 'number' ? qcm_correct_index : null,
-    host_note || null, hint || null
+    host_note || null, hint || null, media.url, media.start
   ).lastInsertRowid;
   res.json({ id });
 });
 
 app.put('/api/questions/:id', (req, res) => {
-  const { text, images, audio_path, video_path, qcm_options, qcm_correct_index, host_note, hint } = req.body || {};
+  const { text, images, audio_path, video_path, qcm_options, qcm_correct_index, host_note, hint, media_url, media_start } = req.body || {};
+  const media = normalizeMedia(media_url, media_start);
   updateQuestionStmt.run(
     text || null, JSON.stringify(images || []), audio_path || null, video_path || null,
     qcm_options ? JSON.stringify(qcm_options) : null,
     typeof qcm_correct_index === 'number' ? qcm_correct_index : null,
-    host_note || null, hint || null,
+    host_note || null, hint || null, media.url, media.start,
     req.params.id
   );
   res.json({ ok: true });
@@ -881,7 +943,7 @@ function openCurrentQuestion() {
     round.startedAt = Date.now();
     if (info.timerEnabled && info.timerSeconds > 0) {
       const ms = info.timerSeconds * 1000;
-      const hasMedia = !!(info.question && (info.question.audio_path || info.question.video_path));
+      const hasMedia = !!(info.question && (info.question.audio_path || info.question.video_path || info.question.media_url));
       if (hasMedia) {
         // Le chargement et le demarrage d'une piste prennent 1 a 2 s : demarrer le decompte tout de suite
         // le decalait par rapport a la musique (30 s de decompte pour une piste arrivee a 28 s). On le

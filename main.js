@@ -774,7 +774,7 @@ function suppressSeekGestureNoiseBriefly(){
 let lastAppliedMediaSeekToken = null;
 function syncMediaPlayback(state){
   var game = state.game;
-  if(!game || !game.current || !game.epreuveStarted) return;
+  if(!game || !game.current || !game.epreuveStarted){ destroyEmbed(); return; }
   var audible = isPrimaryMediaScreen(state);
   [document.getElementById('questionAudio'), document.getElementById('questionVideo')].forEach(function(el){
     if(!el || !el.src) return;
@@ -793,6 +793,114 @@ function syncMediaPlayback(state){
     if(shouldPlay && el.paused){ suppressMediaEventsBriefly(); el.play().catch(function(){}); }
     else if(!shouldPlay && !el.paused){ suppressMediaEventsBriefly(); el.pause(); }
   });
+  syncEmbed(game, audible, shouldPlay, isNewSeek);
+}
+
+// ---- Lecteur integre YouTube / Spotify (question avec media_url) ----
+// Comme pour audio/video, seul l'ecran primaire (display, ou gestionnaire seul) charge le lecteur ;
+// il est cache hors ecran (on n'affiche ni la video ni le titre). Il suit mediaPlaying / mediaSeekToken.
+var embed = null; // { key, provider, start, ready, player, lastCmd }
+var embedScripts = {};
+function loadEmbedApi(provider, cb){
+  var entry = embedScripts[provider];
+  if(entry && entry.api) return cb(entry.api);
+  if(entry){ entry.waiting.push(cb); return; }
+  entry = embedScripts[provider] = { api: null, waiting: [cb] };
+  var done = function(api){ entry.api = api; entry.waiting.splice(0).forEach(function(f){ f(api); }); };
+  if(provider === 'youtube'){
+    window.onYouTubeIframeAPIReady = function(){ done(window.YT); };
+    $('<script>').attr('src', 'https://www.youtube.com/iframe_api').appendTo('head');
+  } else {
+    window.onSpotifyIframeApiReady = function(api){ done(api); };
+    $('<script>').attr('src', 'https://open.spotify.com/embed/iframe-api/v1').attr('async', true).appendTo('head');
+  }
+}
+function parseEmbedUrl(url){
+  var m = String(url || '').match(/[?&]v=([\w-]{11})/);
+  if(m) return { provider: 'youtube', id: m[1] };
+  m = String(url || '').match(/open\.spotify\.com\/track\/(\w+)/);
+  return m ? { provider: 'spotify', id: m[1] } : null;
+}
+function destroyEmbed(){
+  if(!embed) return;
+  var e = embed;
+  embed = null;
+  try { if(e.provider === 'youtube' && e.player && e.player.destroy) e.player.destroy(); else if(e.player && e.player.destroy) e.player.destroy(); } catch(err){}
+  $('#questionEmbedHost').html('<div id="questionEmbedPlayer"></div>');
+}
+function embedReportPlaying(){
+  var st = lastBuzzState;
+  if(!buzzSocket || !st || !st.round || !st.round.awaitingMediaStart || !isPrimaryMediaScreen(st)) return;
+  buzzSocket.emit('media-started');
+}
+function embedMarkReady(e){
+  if(embed !== e) return;
+  e.ready = true;
+  if(lastBuzzState) syncMediaPlayback(lastBuzzState);
+}
+function setupEmbed(q){
+  var key = q.id + '|' + q.media_url + '|' + (q.media_start || 0);
+  if(embed && embed.key === key) return;
+  destroyEmbed();
+  var info = parseEmbedUrl(q.media_url);
+  if(!info) return;
+  var e = embed = { key: key, provider: info.provider, start: q.media_start || 0, ready: false, player: null, lastCmd: null };
+  loadEmbedApi(info.provider, function(api){
+    if(embed !== e) return;
+    if(info.provider === 'youtube'){
+      e.player = new api.Player('questionEmbedPlayer', {
+        width: 200, height: 200, videoId: info.id,
+        playerVars: { controls: 0, playsinline: 1, rel: 0, start: e.start },
+        events: {
+          onReady: function(){ embedMarkReady(e); },
+          onStateChange: function(ev){ if(embed === e && ev.data === 1) embedReportPlaying(); },
+          onError: function(){ if(APP_MODE === 'control') showToast('Cette video YouTube ne peut pas etre lue (integration interdite ou video supprimee).', 'error'); }
+        }
+      });
+    } else {
+      api.createController(document.getElementById('questionEmbedPlayer'), { uri: 'spotify:track:' + info.id, width: 200, height: 152 }, function(ctrl){
+        if(embed !== e){ try { ctrl.destroy(); } catch(err){} return; }
+        e.player = ctrl;
+        ctrl.addListener('ready', function(){ embedMarkReady(e); });
+        ctrl.addListener('playback_update', function(ev){
+          if(embed === e && ev.data && !ev.data.isPaused && !ev.data.isBuffering && ev.data.position > 0) embedReportPlaying();
+        });
+      });
+    }
+  });
+}
+function syncEmbed(game, audible, shouldPlay, isNewSeek){
+  var q = game.current && game.current.question;
+  if(!q || !q.media_url || !audible){ destroyEmbed(); return; }
+  setupEmbed(q);
+  var e = embed;
+  if(!e || !e.ready || !e.player) return;
+  try {
+    if(isNewSeek){
+      var t = e.start + (game.mediaSeekSeconds || 0);
+      if(e.provider === 'youtube') e.player.seekTo(t, true); else e.player.seek(t);
+    }
+    var cmd = shouldPlay ? 'play' : 'pause';
+    if(cmd === e.lastCmd && !isNewSeek) return;
+    var prev = e.lastCmd;
+    e.lastCmd = cmd;
+    if(e.provider === 'youtube') { if(shouldPlay) e.player.playVideo(); else e.player.pauseVideo(); }
+    else { if(!shouldPlay) e.player.pause(); else if(prev === 'pause') e.player.resume(); else e.player.play(); }
+  } catch(err){ e.lastCmd = null; }
+}
+
+// Bouton lecture/pause du gestionnaire pour une question a lecteur integre (pas de barre native).
+$('#questionEmbedToggle').on('click', function(){
+  if(!buzzSocket || !lastBuzzState || !lastBuzzState.game) return;
+  buzzSocket.emit('set-media-playing', !lastBuzzState.game.mediaPlaying);
+});
+function renderEmbedBar(state, q){
+  var $bar = $('#questionEmbedBar');
+  var info = q && q.media_url ? parseEmbedUrl(q.media_url) : null;
+  if(!info || APP_MODE !== 'control'){ $bar.prop('hidden', true); return; }
+  $bar.prop('hidden', false);
+  $('#questionEmbedLabel').text('🎵 ' + (info.provider === 'youtube' ? 'YouTube' : 'Spotify') + (state.displayConnected ? ' — lu sur le display' : ''));
+  $('#questionEmbedToggle').text(state.game.mediaPlaying ? '⏸ Pause' : '▶ Lecture');
 }
 
 // Le premier clic sur cet overlay fournit le "geste utilisateur" qu'exigent
@@ -819,6 +927,7 @@ if(APP_MODE === 'display'){
 $( "#displayAudioUnlockOverlay" ).on( "click", function(){
   $(this).prop('hidden', true);
   if(APP_MODE === 'display' && !fsActive()) fsEnter();
+  if(embed) embed.lastCmd = null;
   if(lastBuzzState) syncMediaPlayback(lastBuzzState);
 });
 
@@ -1752,6 +1861,12 @@ function renderQuestionContent(state){
     $video.prop('hidden', true);
   }
 
+  var hasEmbed = !!(q.media_url && parseEmbedUrl(q.media_url));
+  renderEmbedBar(state, hasEmbed ? q : null);
+  if(hasEmbed && APP_MODE === 'display'){
+    $audioPlaceholder.text('🎵 Question ' + (game.current.questionIndex + 1)).prop('hidden', false);
+  }
+
   var isQcmOrDirect = game.current.responseType === 'qcm' || game.current.responseType === 'direct';
   $('#qcmDirectPanel').prop('hidden', !isQcmOrDirect);
   if(isQcmOrDirect){
@@ -2105,7 +2220,8 @@ function renderQuestionsList(epreuve){
   epreuve.questions.forEach(function(q, i){
     var label = q.text ? q.text.slice(0, 40)
       : (q.audio_path ? '🎵 ' + q.audio_path.split('/').pop()
-      : (q.video_path ? '🎬 ' + q.video_path.split('/').pop()
+      : (q.media_url ? '🎵 ' + q.media_url.replace(/^https?:\/\/(www\.)?/, '')
+      : q.video_path ? '🎬 ' + q.video_path.split('/').pop()
       : (q.images.length ? '🖼 ' + q.images.length + ' image(s)' : 'Question ' + (i + 1))));
     var $row = $('<div class="questionRow" draggable="true"' + (q.id === currentQuestionId ? ' style="background: rgba(0,140,149,0.15);"' : '') + '></div>').attr('data-question-id', q.id);
     $row.append('<span class="dragHandle" title="Glisser pour reordonner">⠿</span>');
@@ -2167,6 +2283,8 @@ function resetQuestionForm(){
   $('#questionImagesInput').val('');
   $('#questionAudioInput').val('');
   $('#questionVideoInput').val('');
+  $('#questionMediaUrlInput').val('');
+  $('#questionMediaStartInput').val('');
   $('#questionImagesPreview').text('');
   $('#questionAudioCurrent').text('');
   $('#questionVideoCurrent').text('');
@@ -2188,6 +2306,8 @@ function editQuestion(q){
   $('#questionImagesInput').val('');
   $('#questionAudioInput').val('');
   $('#questionVideoInput').val('');
+  $('#questionMediaUrlInput').val(q.media_url || '');
+  $('#questionMediaStartInput').val(q.media_start || '');
   $('#questionImagesPreview').text(q.images.length ? q.images.length + ' image(s) actuelle(s) conservee(s) si aucun nouveau fichier choisi' : '');
   $('#questionAudioCurrent').text(q.audio_path ? 'Actuel : ' + q.audio_path.split('/').pop() : '');
   $('#questionVideoCurrent').text(q.video_path ? 'Actuel : ' + q.video_path.split('/').pop() : '');
@@ -2241,7 +2361,7 @@ $( "#saveQuestionButton" ).on( "click", function(){
     audioFile ? uploadFile(audioFile) : Promise.resolve(existing ? existing.audio_path : null),
     videoFile ? uploadFile(videoFile) : Promise.resolve(existing ? existing.video_path : null)
   ]).then(function(results){
-    var payload = { text: text, images: results[0], audio_path: results[1], video_path: results[2], host_note: $('#questionHostNoteInput').val().trim(), hint: $('#questionHintInput').val().trim() };
+    var payload = { text: text, images: results[0], audio_path: results[1], video_path: results[2], media_url: $('#questionMediaUrlInput').val().trim(), media_start: $('#questionMediaStartInput').val(), host_note: $('#questionHostNoteInput').val().trim(), hint: $('#questionHintInput').val().trim() };
     if(isQcm){
       payload.qcm_options = $('#qcmOptionsInput').val().split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
       payload.qcm_correct_index = parseInt($('#qcmCorrectIndexInput').val(), 10);
@@ -2253,6 +2373,33 @@ $( "#saveQuestionButton" ).on( "click", function(){
     resetQuestionForm();
     loadEpreuves().then(function(){ selectEpreuve(currentEpreuveId); });
   });
+});
+
+$( "#togglePlaylistImportButton" ).on( "click", function(){
+  $('#playlistImportBlock').prop('hidden', function(i, v){ return !v; });
+});
+$( "#importPlaylistButton" ).on( "click", function(){
+  var url = $('#playlistUrlInput').val().trim();
+  if(!url){ showToast('Collez un lien de playlist YouTube ou Spotify.', 'error'); return; }
+  var $btn = $(this).prop('disabled', true).text('Import en cours…');
+  fetch(BUZZ_SERVER_URL + '/api/import-playlist', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      url: url, name: $('#playlistNameInput').val().trim(),
+      response_type: $('#playlistTypeInput').val(), start: $('#playlistStartInput').val(),
+      limit: $('#playlistLimitInput').val(), timer_seconds: $('#playlistTimerInput').val(),
+      default_points: $('#playlistPointsInput').val(), shuffle: $('#playlistShuffleInput').prop('checked')
+    })
+  }).then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
+    .then(function(res){
+      if(!res.ok){ showToast(res.d.error || 'Import impossible.', 'error'); return; }
+      showToast('Épreuve « ' + res.d.name + ' » créée (' + res.d.count + ' morceaux).', 'success');
+      $('#playlistUrlInput, #playlistNameInput').val('');
+      $('#playlistImportBlock').prop('hidden', true);
+      loadEpreuves().then(function(){ selectEpreuve(res.d.id); });
+    })
+    .catch(function(){ showToast('Import impossible (serveur injoignable).', 'error'); })
+    .then(function(){ $btn.prop('disabled', false).text('Générer l\'épreuve'); });
 });
 
 $( "#manageEpreuvesButton" ).on( "click", function(){

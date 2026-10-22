@@ -18,6 +18,8 @@ Outil de quiz en direct pour team building (Team Building du Phoenix) : l'animat
 
 - Plein écran automatique (smartphone/tablette, `pointer: coarse` uniquement ; pas sur le display) : activé au lancement du scénario (clic « Lancer » côté gestionnaire) ou au premier appui une fois la partie démarrée (téléphone, ou page rechargée en cours de partie), une tentative par chargement. Réglage `localStorage.autoFullscreen` ('0' = désactivé) : case dans la barre latérale (gestionnaire) ou ⚙ Réglages (téléphone). Indisponible sur iPhone Safari (API absente).
 
+- Musique YouTube / Spotify : colonnes `questions.media_url` (lien canonique) et `media_start` (s, YouTube). Lecteur intégré caché hors écran (`#questionEmbedHost`), piloté par `syncEmbed` (appelé depuis `syncMediaPlayback`) sur le seul écran primaire ; bouton ⏯ gestionnaire `#questionEmbedToggle`. Import d'une playlist en épreuve complète : `POST /api/import-playlist` (`server/playlist.js`, UI « Importer une playlist » dans Gérer les épreuves). Sans clé, lecture des pages publiques (fragile) ; fiable avec `YOUTUBE_API_KEY` ou `SPOTIFY_CLIENT_ID`+`SPOTIFY_CLIENT_SECRET`. Spotify sans compte Premium connecté = extraits de 30 s.
+
 ## Données
 - SQLite (migrations additives via `ensureColumn` au démarrage du serveur) : épreuves, questions (médias dans `medias/`/uploads), scénarios, historique des parties. Mode répétition = partie non enregistrée.
 - Les équipes/scores en cours vivent en mémoire serveur + `localStorage` du gestionnaire (autorité sur la liste d'équipes).

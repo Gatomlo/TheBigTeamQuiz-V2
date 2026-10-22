@@ -1680,3 +1680,7 @@ body.mode-control .teamCollect .columnTitle{display:flex;align-items:center;just
 body.mode-control .phoneBtn{background:none;border:0;cursor:pointer;font-size:1rem;padding:0 4px}
 body.mode-control .teamPhoneBtn{cursor:pointer;padding:0 4px}
 body.mode-control .teamPhoneBtn[hidden],body.mode-control .phoneBtn[hidden]{display:none}
+
+/* Lecteur YouTube/Spotify integre : joue le son, jamais visible (ni video ni titre). */
+.questionEmbedHost{position:fixed;left:-9999px;top:0;width:200px;height:200px;overflow:hidden;pointer-events:none}
+.questionEmbedBar{display:flex;align-items:center;gap:.6rem;margin:.4rem 0}
