@@ -491,6 +491,8 @@ app.post('/api/change-password', (req, res) => {
 // ---- Etat du jeu en memoire (une seule partie en cours a la fois) ----
 let teams = [];
 let teamScores = {};
+let phoneMuteAll = false;      // musique coupee sur tous les telephones (pilote par le gestionnaire)
+let phoneMutedTeams = new Set(); // ... ou seulement pour certaines equipes
 let teamSounds = {};
 let sessionStartedAt = null;
 let sessionPlayedEpreuveNames = []; // noms des epreuves jouees depuis le debut de la session (historique des parties)
@@ -939,6 +941,8 @@ function currentState(includeSecret) {
     displayConnected: displayClientCount > 0,
     phoneClientCount,
     rehearsalMode,
+    phoneMuteAll,
+    phoneMutedTeams: Array.from(phoneMutedTeams),
     vote: publicVote(!!includeSecret),
     game: {
       hasScenario: !!game.scenario,
@@ -1384,6 +1388,17 @@ io.on('connection', (socket) => {
   socket.on('media-started', () => {
     if (!round.awaitingMediaStart || !game.mediaPlaying || round.activeTeam) return;
     resumeReflectionTimer();
+    broadcastState();
+  });
+
+  // Gestionnaire : coupe/retablit la musique des telephones (tous, ou une equipe si 'team' est donne).
+  socket.on('set-phone-mute', (msg) => {
+    if (!msg || typeof msg.muted !== 'boolean') return;
+    if (typeof msg.team === 'string' && msg.team) {
+      if (msg.muted) phoneMutedTeams.add(msg.team); else phoneMutedTeams.delete(msg.team);
+    } else {
+      phoneMuteAll = msg.muted;
+    }
     broadcastState();
   });
 

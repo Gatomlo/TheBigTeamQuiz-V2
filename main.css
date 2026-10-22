@@ -1674,3 +1674,8 @@ body.mode-display .menuWrap{display:none !important}
 body.mode-control .mainc{display:flex;flex-direction:column}
 body.mode-control .panelsRow{flex:1 1 auto}
 body.mode-control .sideCol .joinCollect{flex:1 1 auto}
+
+/* Coupure de la musique des telephones (menu gestionnaire) */
+body.mode-control .phoneMuteTeams{display:flex;flex-wrap:wrap;gap:6px;padding:4px 8px 8px}
+body.mode-control .phoneMuteTeam{width:auto;padding:4px 10px;border-radius:999px}
+body.mode-control .phoneMuteTeam[aria-pressed="true"]{opacity:.7;text-decoration:line-through}

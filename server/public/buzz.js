@@ -571,8 +571,13 @@ const phoneMusicInput = document.getElementById('phoneMusicInput');
 const phoneAudio = new Audio();
 phoneAudio.preload = 'auto';
 let phoneMusicSeekToken = null;
+let phoneMusicSkipKey = null; // piste deja en cours quand l'option a ete activee : ne joue qu'a partir de la suivante
+function phoneTrackKey(game) {
+  const c = game.current;
+  return c && c.question ? [c.epreuveIndex, c.questionIndex, c.question.audio_path].join('|') : null;
+}
 function phoneMusicPreferred() {
-  try { return localStorage.getItem(PHONE_MUSIC_KEY) === '1'; } catch (e) { return false; }
+  try { return localStorage.getItem(PHONE_MUSIC_KEY) !== '0'; } catch (e) { return true; }
 }
 // Chemin relatif : "uploads/x.mp3" ou "medias/x.mp3" (servi sous gestion/), valable derriere une passerelle.
 function phoneMusicUrl(path) {
@@ -584,7 +589,8 @@ function syncPhoneMusic(state) {
   const game = state.game || {};
   const q = game.current && game.current.question;
   const path = q && q.audio_path;
-  if (!phoneMusicPreferred() || !path || !game.epreuveStarted) {
+  const muted = !!state.phoneMuteAll || (myTeam && (state.phoneMutedTeams || []).indexOf(myTeam) !== -1);
+  if (!phoneMusicPreferred() || muted || !path || !game.epreuveStarted || phoneTrackKey(game) === phoneMusicSkipKey) {
     if (!phoneAudio.paused) phoneAudio.pause();
     if (!path && phoneAudio.getAttribute('src')) { phoneAudio.removeAttribute('src'); phoneAudio.load(); }
     return;
@@ -601,9 +607,14 @@ function syncPhoneMusic(state) {
 }
 phoneMusicInput.addEventListener('change', () => {
   try { localStorage.setItem(PHONE_MUSIC_KEY, phoneMusicInput.checked ? '1' : '0'); } catch (e) { /* ignore */ }
+  // Active en cours de piste : on attend la piste suivante ; desactive : on oublie la consigne.
+  phoneMusicSkipKey = phoneMusicInput.checked && latestState.game ? phoneTrackKey(latestState.game) : null;
   // Ce clic est le geste qui autorise la lecture : la synchro lance directement la piste en cours.
   syncPhoneMusic(latestState);
 });
+
+// Active par defaut : la lecture auto est bloquee tant qu'aucun geste n'a eu lieu, on retente au premier appui.
+document.addEventListener('click', () => { if (latestState && latestState.game) syncPhoneMusic(latestState); }, true);
 
 // ---- Plein ecran automatique (smartphone/tablette) ----
 // Les navigateurs n'autorisent le plein ecran que sur un geste de l'utilisateur :
