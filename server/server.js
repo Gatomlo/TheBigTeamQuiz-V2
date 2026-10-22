@@ -1008,7 +1008,7 @@ io.on('connection', (socket) => {
   });
 
   // Envoye par l'ecran gestionnaire pour afficher/masquer le QR code en grand sur le projo.
-  socket.on('show-qr', () => { qrVisible = true; displayMessage = null; broadcastState(); });
+  socket.on('show-qr', () => { qrVisible = true; scoreboardVisible = null; displayMessage = null; broadcastState(); });
   socket.on('hide-qr', () => { qrVisible = false; broadcastState(); });
 
   // Envoye par l'ecran gestionnaire pour afficher/masquer un classement sur le grand ecran
@@ -1016,6 +1016,7 @@ io.on('connection', (socket) => {
   socket.on('show-scoreboard', (payload) => {
     if (!payload || (payload.type !== 'current' && payload.type !== 'alltime')) return;
     scoreboardVisible = payload;
+    qrVisible = false;
     displayMessage = null;
     broadcastState();
   });
@@ -1034,6 +1035,8 @@ io.on('connection', (socket) => {
       countdownSeconds: seconds > 0 ? seconds : null,
       countdownEndsAt: seconds > 0 ? Date.now() + seconds * 1000 : null
     };
+    qrVisible = false;
+    scoreboardVisible = null;
     broadcastState();
   });
   socket.on('hide-display-message', () => { displayMessage = null; broadcastState(); });

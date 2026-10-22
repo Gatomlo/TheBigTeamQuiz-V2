@@ -333,8 +333,27 @@ function renderScoreboard(){
   });
 }
 
+function renderDisplayMessage() {
+  const msg = latestState.displayMessage;
+  const overlay = document.getElementById('displayMessageOverlay');
+  if (!msg || !myTeam) { overlay.hidden = true; return; }
+  document.getElementById('phoneMessageText').textContent = msg.text || '';
+  const img = document.getElementById('phoneMessageImage');
+  if (msg.imageUrl) { if (img.getAttribute('src') !== msg.imageUrl) img.src = msg.imageUrl; img.hidden = false; }
+  else { img.hidden = true; }
+  const cd = document.getElementById('phoneMessageCountdown');
+  if (msg.countdownEndsAt) {
+    const left = Math.max(0, Math.ceil((msg.countdownEndsAt - Date.now()) / 1000));
+    cd.textContent = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
+    cd.hidden = false;
+  } else { cd.hidden = true; }
+  overlay.hidden = false;
+}
+setInterval(() => { if (latestState && latestState.displayMessage) renderDisplayMessage(); }, 500);
+
 function render() {
   const { teams, teamScores, round, config } = latestState;
+  renderDisplayMessage();
   const teamStillExists = myTeam && teams.includes(myTeam);
 
   if (!teamStillExists) {

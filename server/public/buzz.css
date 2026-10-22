@@ -328,3 +328,6 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
   box-shadow: 0 12px 30px -12px rgba(0,0,0,.5);
 }
 .fsToast[hidden] { display: none; }
+
+.phoneMessageImage { max-width: 100%; max-height: 40vh; border-radius: 12px; margin-bottom: 12px; }
+#displayMessageOverlay { z-index: 200; }
