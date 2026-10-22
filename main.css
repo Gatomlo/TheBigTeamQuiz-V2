@@ -1675,7 +1675,8 @@ body.mode-control .mainc{display:flex;flex-direction:column}
 body.mode-control .panelsRow{flex:1 1 auto}
 body.mode-control .sideCol .joinCollect{flex:1 1 auto}
 
-/* Coupure de la musique des telephones (menu gestionnaire) */
-body.mode-control .phoneMuteTeams{display:flex;flex-wrap:wrap;gap:6px;padding:4px 8px 8px}
-body.mode-control .phoneMuteTeam{width:auto;padding:4px 10px;border-radius:999px}
-body.mode-control .phoneMuteTeam[aria-pressed="true"]{opacity:.7;text-decoration:line-through}
+/* Musique des telephones : boutons du gestionnaire (titre Equipes + une icone par equipe) */
+body.mode-control .teamCollect .columnTitle{display:flex;align-items:center;justify-content:space-between}
+body.mode-control .phoneBtn{background:none;border:0;cursor:pointer;font-size:1rem;padding:0 4px}
+body.mode-control .teamPhoneBtn{cursor:pointer;padding:0 4px}
+body.mode-control .teamPhoneBtn[hidden],body.mode-control .phoneBtn[hidden]{display:none}

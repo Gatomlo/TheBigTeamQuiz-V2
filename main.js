@@ -135,10 +135,14 @@ function setTeamSound(name, sound){
   localStorage.setItem('sound_'+name, sound);
 }
 
+var phoneMuteView = { enabled: true, all: false, teams: [] };
+function isPhoneTeamMuted(name){ return phoneMuteView.all || phoneMuteView.teams.indexOf(name) !== -1; }
 function buildTeamRowHtml(rank, teamName, color, value){
+  var pm = isPhoneTeamMuted(teamName);
   return '<div data-value='+value+' data-team="'+teamName+'" class="team" style="--c:'+color+'">'
     + '<i class="dot"></i>'
     + '<span class="teamNameCell">'+rank+'° '+teamName+'</span>'
+    + '<span class="teamPhoneBtn" role="button" title="Couper / rétablir la musique de cette équipe" aria-pressed="'+pm+'"'+(APP_MODE === 'control' && phoneMuteView.enabled ? '' : ' hidden')+'>'+(pm ? '🔇' : '🔊')+'</span>'
     + '<span class="teamEditBtn" title="Modifier l\'équipe">✎</span>'
     + '<span class="pointBadge"><span class="badge text-bg-success">'+value+'</span></span>'
     + '</div>';
@@ -1936,30 +1940,28 @@ $( "#closeGameButton" ).on( "click", function(){
   });
 });
 
-// Musique des telephones : coupure globale ou par equipe (boutons reconstruits seulement si la liste change).
-var lastPhoneMuteSig = null;
+// Musique des telephones : interrupteur du menu, bouton global (titre « Équipes ») et icone par equipe.
+// Mise a jour par attributs/texte uniquement (les lignes d'equipe sont reconstruites ailleurs : voir buildTeamRowHtml).
 function renderPhoneMute(state){
-  var muted = state.phoneMutedTeams || [];
-  $('#phoneMuteAllCheckbox').prop('checked', !!state.phoneMuteAll);
+  phoneMuteView = { enabled: state.phoneMusicEnabled !== false, all: !!state.phoneMuteAll, teams: state.phoneMutedTeams || [] };
+  $('#phoneMusicEnabledCheckbox').prop('checked', phoneMuteView.enabled);
   var teams = state.teams || [];
-  var sig = JSON.stringify([teams, muted, !!state.phoneMuteAll]);
-  if(sig === lastPhoneMuteSig) return;
-  lastPhoneMuteSig = sig;
-  var $box = $('#phoneMuteTeams').empty();
-  teams.forEach(function(name){
-    var isMuted = muted.indexOf(name) !== -1;
-    $('<button type="button" class="sact phoneMuteTeam"></button>')
-      .attr('data-team', name).attr('aria-pressed', String(isMuted)).prop('disabled', !!state.phoneMuteAll)
-      .text((isMuted ? '🔇 ' : '🔊 ') + name).appendTo($box);
+  var allMuted = teams.length > 0 && teams.every(function(t){ return isPhoneTeamMuted(t); });
+  $('#phoneMuteAllBtn').prop('hidden', !phoneMuteView.enabled).attr('aria-pressed', String(allMuted)).text(allMuted ? '🔇' : '🔊');
+  $('#listOfTeam .teamPhoneBtn').each(function(){
+    var m = isPhoneTeamMuted($(this).closest('.team').data('team'));
+    $(this).prop('hidden', !phoneMuteView.enabled).attr('aria-pressed', String(m)).text(m ? '🔇' : '🔊');
   });
 }
-$('#phoneMuteAllCheckbox').on('change', function(){
-  if(buzzSocket) buzzSocket.emit('set-phone-mute', { muted: $(this).is(':checked') });
+$('#phoneMusicEnabledCheckbox').on('change', function(){
+  if(buzzSocket) buzzSocket.emit('set-phone-music-enabled', $(this).is(':checked'));
 });
-$(document).on('click', '.phoneMuteTeam', function(e){
-  e.stopPropagation(); // garde le menu ouvert
-  var muted = $(this).attr('aria-pressed') !== 'true';
-  if(buzzSocket) buzzSocket.emit('set-phone-mute', { team: $(this).attr('data-team'), muted: muted });
+$('#phoneMuteAllBtn').on('click', function(){
+  if(buzzSocket) buzzSocket.emit('set-phone-mute', { muted: $(this).attr('aria-pressed') !== 'true' });
+});
+$(document).on('click', '.teamPhoneBtn', function(e){
+  e.stopPropagation(); // ne pas ouvrir le modal de points
+  if(buzzSocket) buzzSocket.emit('set-phone-mute', { team: $(this).closest('.team').data('team'), muted: $(this).attr('aria-pressed') !== 'true' });
 });
 
 $( "#rehearsalModeCheckbox" ).on( "change", function(){

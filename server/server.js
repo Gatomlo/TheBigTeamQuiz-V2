@@ -491,6 +491,7 @@ app.post('/api/change-password', (req, res) => {
 // ---- Etat du jeu en memoire (une seule partie en cours a la fois) ----
 let teams = [];
 let teamScores = {};
+let phoneMusicEnabled = true;  // fonction musique-sur-telephones activee (interrupteur du menu gestionnaire)
 let phoneMuteAll = false;      // musique coupee sur tous les telephones (pilote par le gestionnaire)
 let phoneMutedTeams = new Set(); // ... ou seulement pour certaines equipes
 let teamSounds = {};
@@ -941,6 +942,7 @@ function currentState(includeSecret) {
     displayConnected: displayClientCount > 0,
     phoneClientCount,
     rehearsalMode,
+    phoneMusicEnabled,
     phoneMuteAll,
     phoneMutedTeams: Array.from(phoneMutedTeams),
     vote: publicVote(!!includeSecret),
@@ -1391,13 +1393,26 @@ io.on('connection', (socket) => {
     broadcastState();
   });
 
-  // Gestionnaire : coupe/retablit la musique des telephones (tous, ou une equipe si 'team' est donne).
+  // Gestionnaire : active/desactive toute la fonction musique sur les telephones.
+  socket.on('set-phone-music-enabled', (enabled) => {
+    if (typeof enabled !== 'boolean') return;
+    phoneMusicEnabled = enabled;
+    broadcastState();
+  });
+
+  // Gestionnaire : coupe/retablit la musique des telephones (toutes les equipes, ou une seule si 'team' est donne).
   socket.on('set-phone-mute', (msg) => {
     if (!msg || typeof msg.muted !== 'boolean') return;
     if (typeof msg.team === 'string' && msg.team) {
-      if (msg.muted) phoneMutedTeams.add(msg.team); else phoneMutedTeams.delete(msg.team);
+      if (phoneMuteAll && !msg.muted) {
+        // Retablir une equipe quand tout est coupe : on bascule en mode "equipe par equipe", toutes les autres restent coupees.
+        phoneMuteAll = false;
+        phoneMutedTeams = new Set(teams.filter((t) => t !== msg.team));
+      } else if (msg.muted) phoneMutedTeams.add(msg.team);
+      else phoneMutedTeams.delete(msg.team);
     } else {
       phoneMuteAll = msg.muted;
+      if (!msg.muted) phoneMutedTeams.clear();
     }
     broadcastState();
   });

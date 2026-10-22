@@ -589,7 +589,7 @@ function syncPhoneMusic(state) {
   const game = state.game || {};
   const q = game.current && game.current.question;
   const path = q && q.audio_path;
-  const muted = !!state.phoneMuteAll || (myTeam && (state.phoneMutedTeams || []).indexOf(myTeam) !== -1);
+  const muted = state.phoneMusicEnabled === false || !!state.phoneMuteAll || (myTeam && (state.phoneMutedTeams || []).indexOf(myTeam) !== -1);
   if (!phoneMusicPreferred() || muted || !path || !game.epreuveStarted || phoneTrackKey(game) === phoneMusicSkipKey) {
     if (!phoneAudio.paused) phoneAudio.pause();
     if (!path && phoneAudio.getAttribute('src')) { phoneAudio.removeAttribute('src'); phoneAudio.load(); }

@@ -139,9 +139,9 @@
                 <label class="sact sw" for="rehearsalModeCheckbox"><input type="checkbox" id="rehearsalModeCheckbox">Mode répétition</label>
                 <label class="sact sw" for="autoFullscreenCheckbox" id="autoFullscreenRow" hidden><input type="checkbox" id="autoFullscreenCheckbox">Plein écran automatique</label>
               </div>
-              <div class="menuGroup" id="phoneMuteGroup">
-                <label class="sact sw" for="phoneMuteAllCheckbox"><input type="checkbox" id="phoneMuteAllCheckbox">Couper la musique des téléphones</label>
-                <div id="phoneMuteTeams" class="phoneMuteTeams"></div>
+              <div class="menuGroup">
+                <label class="sact sw" for="phoneMusicEnabledCheckbox"><input type="checkbox" id="phoneMusicEnabledCheckbox" checked>Musique sur les smartphones</label>
+              </div>
               </div>
               <div class="menuGroup">
                 <button id="manageEpreuvesButton" type="button" class="sact"><svg class="i"><use href="#i-film"/></svg>Gérer les épreuves</button>
@@ -293,7 +293,7 @@
           <!-- Colonne de droite : equipes, affichage, joueurs -->
           <div class="sideCol">
             <div class="teamCollect col-2 panel">
-              <h5 class="columnTitle">Équipes</h5>
+              <h5 class="columnTitle">Équipes<button type="button" id="phoneMuteAllBtn" class="phoneBtn" title="Couper / rétablir la musique de toutes les équipes" hidden>🔊</button></h5>
               <div id="listOfTeam" class="teamList"></div>
               <div id="teamActions">
                 <button id="addTeam" type="button" class="btn btn-success toolbarBtn" title="Ajouter une équipe">
