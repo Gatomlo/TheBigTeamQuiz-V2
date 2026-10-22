@@ -189,6 +189,7 @@ initCreateSoundPicker();
 socket.on('state', (state) => {
   const wasHoldingFloor = iHoldTheFloor;
   latestState = state;
+  syncPhoneMusic(state);
   iHoldTheFloor = myTeam && state.round.activeTeam === myTeam;
   if (iHoldTheFloor && !wasHoldingFloor) {
     playBuzzSound((state.teamSounds && state.teamSounds[myTeam]) || 'cloche', state.config && state.config.buzzVolume);
@@ -560,6 +561,50 @@ setInterval(render, 1000);
 
 render();
 
+// ---- Musique sur le telephone (option, desactivee par defaut) ----
+// Le telephone rejoue la piste audio de la question courante en suivant l'etat serveur
+// (lecture/pause du gestionnaire, pause quand une equipe repond, positionnement). Le
+// decalage reste approximatif : le serveur ne connait pas la position exacte, seulement
+// les ordres de lecture. Cocher l'option est le geste qui debloque l'audio du navigateur.
+const PHONE_MUSIC_KEY = 'phoneMusic';
+const phoneMusicInput = document.getElementById('phoneMusicInput');
+const phoneAudio = new Audio();
+phoneAudio.preload = 'auto';
+let phoneMusicSeekToken = null;
+function phoneMusicPreferred() {
+  try { return localStorage.getItem(PHONE_MUSIC_KEY) === '1'; } catch (e) { return false; }
+}
+// Chemin relatif : "uploads/x.mp3" ou "medias/x.mp3" (servi sous gestion/), valable derriere une passerelle.
+function phoneMusicUrl(path) {
+  if (/^https?:\/\//.test(path)) return path;
+  const p = path.replace(/^\/+/, '');
+  return /^uploads\//.test(p) ? p : 'gestion/' + p;
+}
+function syncPhoneMusic(state) {
+  const game = state.game || {};
+  const q = game.current && game.current.question;
+  const path = q && q.audio_path;
+  if (!phoneMusicPreferred() || !path || !game.epreuveStarted) {
+    if (!phoneAudio.paused) phoneAudio.pause();
+    if (!path && phoneAudio.getAttribute('src')) { phoneAudio.removeAttribute('src'); phoneAudio.load(); }
+    return;
+  }
+  const url = phoneMusicUrl(path);
+  if (phoneAudio.getAttribute('src') !== url) { phoneAudio.setAttribute('src', url); phoneMusicSeekToken = null; }
+  if (phoneMusicSeekToken !== null && game.mediaSeekToken !== phoneMusicSeekToken) {
+    try { phoneAudio.currentTime = game.mediaSeekSeconds; } catch (e) { /* ignore */ }
+  }
+  phoneMusicSeekToken = game.mediaSeekToken;
+  const shouldPlay = !!game.mediaPlaying && !(state.round && state.round.activeTeam);
+  if (shouldPlay && phoneAudio.paused) phoneAudio.play().catch(() => {});
+  else if (!shouldPlay && !phoneAudio.paused) phoneAudio.pause();
+}
+phoneMusicInput.addEventListener('change', () => {
+  try { localStorage.setItem(PHONE_MUSIC_KEY, phoneMusicInput.checked ? '1' : '0'); } catch (e) { /* ignore */ }
+  // Ce clic est le geste qui autorise la lecture : la synchro lance directement la piste en cours.
+  syncPhoneMusic(latestState);
+});
+
 // ---- Plein ecran automatique (smartphone/tablette) ----
 // Les navigateurs n'autorisent le plein ecran que sur un geste de l'utilisateur :
 // des que la partie a demarre (un scenario est lance), le PREMIER appui ensuite
@@ -618,6 +663,7 @@ document.addEventListener('click', () => {
 
 settingsButton.addEventListener('click', () => {
   autoFullscreenInput.checked = fsPreferred();
+  phoneMusicInput.checked = phoneMusicPreferred();
   const supported = fsSupported();
   autoFullscreenInput.disabled = !supported;
   autoFullscreenHint.textContent = supported

@@ -794,8 +794,27 @@ function syncMediaPlayback(state){
 // Le premier clic sur cet overlay fournit le "geste utilisateur" qu'exigent
 // les navigateurs avant d'autoriser une lecture automatique avec du son ;
 // sans lui, tous les appels a .play() de syncMediaPlayback echouent en silence.
+// Plein ecran du projecteur (display uniquement) : le clic de l'overlay de deverrouillage du son
+// l'active aussi ; ensuite touche F ou double-clic pour basculer (Echap pour sortir).
+function displayToggleFullscreen(){
+  if(!fsSupported()) return;
+  if(fsActive()){
+    var exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if(exit){ try { Promise.resolve(exit.call(document)).catch(function(){}); } catch(e){} }
+  } else {
+    fsEnter();
+  }
+}
+if(APP_MODE === 'display'){
+  $(document).on('keydown', function(e){
+    if((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) displayToggleFullscreen();
+  });
+  $(document).on('dblclick', displayToggleFullscreen);
+}
+
 $( "#displayAudioUnlockOverlay" ).on( "click", function(){
   $(this).prop('hidden', true);
+  if(APP_MODE === 'display' && !fsActive()) fsEnter();
   if(lastBuzzState) syncMediaPlayback(lastBuzzState);
 });
 
