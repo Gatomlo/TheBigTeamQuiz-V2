@@ -2088,254 +2088,548 @@ $( "#prevQuestionButton" ).on( "click", function(){ if(buzzSocket && APP_MODE ==
 $( "#nextQuestionButton" ).on( "click", function(){ if(buzzSocket && APP_MODE === 'control') buzzSocket.emit('next-question'); });
 $( "#startEpreuveButton" ).on( "click", function(){ if(buzzSocket && APP_MODE === 'control') buzzSocket.emit('start-epreuve'); });
 
-// ---- Gerer les epreuves ----
+// ---- Atelier : epreuves, questions et scenarios ----
+// Un seul espace plein ecran (#atelierModal) a deux onglets. Tout s'enregistre
+// automatiquement (voir atScheduleSave) : pas de bouton "Enregistrer".
 let currentEpreuveId = null;
 let currentEpreuves = [];
-let currentQuestionId = null; // null = nouvelle question ; sinon id de la question en cours d'edition
+let currentQuestionId = null;
+var atCat = 'all';
+var atPreviewMode = 'display';
+var atOpts = [];      // choix QCM en cours d'edition (peut contenir des lignes vides)
+var atCorrect = -1;   // index de la bonne reponse dans atOpts
+
+var CATEGORY_ICONS = { cinema: '🎬', musique: '🎵', culture_g: '🧠', culture_e: '🌍' };
+var CATEGORY_LABELS = { cinema: 'Cinéma', musique: 'Musique', culture_g: 'Culture G', culture_e: 'Culture E' };
+var RESPONSE_LABELS = { buzzer: 'Buzzer', qcm: 'QCM', direct: 'Réponse directe' };
+// Icone visuelle associee a la categorie d'une epreuve, reutilisee dans l'atelier
+// et dans le menu de choix des epreuves.
+function normCategory(category){
+  var c = String(category || '').toLowerCase();
+  return CATEGORY_LABELS.hasOwnProperty(c) ? c : 'cinema';
+}
+function categoryIcon(category){
+  return CATEGORY_ICONS[normCategory(category)];
+}
+
+// ---- Enregistrement automatique ----
+var atPending = {};
+var atInflight = 0;
+function atStatus(text){ $('#atelierSaveStatus').text(text); }
+function atApi(method, url, body){
+  return fetch(BUZZ_SERVER_URL + url, {
+    method: method, headers: {'Content-Type':'application/json'}, body: body ? JSON.stringify(body) : undefined
+  }).then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+}
+function atRun(fn){
+  atInflight++;
+  atStatus('Enregistrement…');
+  return Promise.resolve().then(fn).then(function(){
+    atInflight--;
+    if(!atInflight && !Object.keys(atPending).length) atStatus('Enregistré');
+  }).catch(function(){
+    atInflight--;
+    atStatus('Échec de l\'enregistrement');
+    showToast('Enregistrement impossible.', 'error');
+  });
+}
+function atScheduleSave(key, fn){
+  if(atPending[key]) clearTimeout(atPending[key].t);
+  atStatus('Modifications en attente…');
+  atPending[key] = { fn: fn, t: setTimeout(function(){
+    var p = atPending[key]; delete atPending[key]; atRun(p.fn);
+  }, 700) };
+}
+function atFlush(){
+  return Promise.all(Object.keys(atPending).map(function(key){
+    var p = atPending[key]; clearTimeout(p.t); delete atPending[key];
+    return atRun(p.fn);
+  }));
+}
 
 function loadEpreuves(){
   return fetch(BUZZ_SERVER_URL + '/api/epreuves').then(function(r){ return r.json(); }).then(function(list){
     currentEpreuves = list;
-    renderEpreuvesList();
     return list;
   });
 }
-
-// Icone visuelle associee a la categorie d'une epreuve, reutilisee dans la
-// liste de gestion et dans le menu de choix des epreuves.
-var CATEGORY_ICONS = { cinema: '🎬', musique: '🎵', culture_g: '🧠', culture_e: '🌍' };
-function categoryIcon(category){
-  return CATEGORY_ICONS[category] || '🎬';
+function curEpreuve(){ return currentEpreuves.find(function(e){ return e.id === currentEpreuveId; }) || null; }
+function curQuestion(){
+  var e = curEpreuve();
+  return e ? (e.questions.find(function(q){ return q.id === currentQuestionId; }) || null) : null;
 }
+// Une question a une reponse si l'animateur en a une (ou, en QCM, une bonne option).
+function qHasAnswer(e, q){
+  if(e.response_type === 'qcm' && q.qcm_correct_index != null && q.qcm_options && q.qcm_options[q.qcm_correct_index]) return true;
+  return !!(q.host_note || '').trim();
+}
+function missingAnswers(e){ return e.questions.filter(function(q){ return !qHasAnswer(e, q); }).length; }
+function questionLabel(q, i){
+  return q.text ? q.text
+    : (q.audio_path ? '🎵 ' + q.audio_path.split('/').pop()
+    : (q.media_url ? '🎵 ' + q.media_url.replace(/^https?:\/\/(www\.)?/, '')
+    : q.video_path ? '🎬 ' + q.video_path.split('/').pop()
+    : (q.images.length ? '🖼 ' + q.images.length + ' image(s)' : 'Question ' + (i + 1))));
+}
+function plural(n, one, many){ return n + ' ' + (n === 1 ? one : (many || one + 's')); }
 
+// ---- Bibliotheque d'epreuves ----
 function renderEpreuvesList(){
   var $list = $('#epreuvesList');
-  $list.html('');
   var query = ($('#epreuveSearchInput').val() || '').trim().toLowerCase();
-  var filtered = query
-    ? currentEpreuves.filter(function(e){ return e.name.toLowerCase().indexOf(query) !== -1; })
-    : currentEpreuves;
+  var filtered = currentEpreuves.filter(function(e){
+    return (atCat === 'all' || normCategory(e.category) === atCat) && e.name.toLowerCase().indexOf(query) !== -1;
+  });
   if(!filtered.length){
-    $list.append('<p class="text-muted small">Aucune épreuve ne correspond à « ' + query + ' ».</p>');
+    $list.html('<li class="atNone">Aucune épreuve ne correspond.</li>');
     return;
   }
-  filtered.forEach(function(e){
-    var timerLabel = e.timer_enabled ? (', ⏱' + e.timer_seconds + 's') : '';
-    var questionCount = e.questions ? e.questions.length : 0;
-    var $row = $('<div class="epreuveRow' + (e.id === currentEpreuveId ? ' active' : '') + '">' + categoryIcon(e.category) + ' ' + e.name + ' <span class="text-muted">(' + questionCount + ' question' + (questionCount !== 1 ? 's' : '') + ', ' + e.response_type + ', ' + e.default_points + ' pts' + timerLabel + ')</span></div>');
-    $row.on('click', function(){ selectEpreuve(e.id); });
-    $list.append($row);
-  });
+  $list.html(filtered.map(function(e){
+    var miss = missingAnswers(e);
+    return '<li tabindex="0" data-id="' + e.id + '"' + (e.id === currentEpreuveId ? ' aria-current="true"' : '') + '>' +
+      '<span class="atDot c-' + normCategory(e.category) + '"></span>' +
+      '<div><div class="atName">' + escapeHtml(e.name) + '</div><div class="atMeta">' + CATEGORY_LABELS[normCategory(e.category)] + ' · ' + RESPONSE_LABELS[e.response_type] + '</div></div>' +
+      '<span class="atCnt">' + (miss ? '<span class="atTag atWarn" title="' + plural(miss, 'réponse manquante', 'réponses manquantes') + '">⚠ ' + miss + '</span> ' : '') + e.questions.length + ' q.</span></li>';
+  }).join(''));
 }
-
-// Filtre en direct pendant la frappe (bibliotheque d'epreuves potentiellement
-// longue avec le temps).
-$( "#epreuveSearchInput" ).on( "input", function(){
+$('#epreuvesList').on('click keydown', 'li[data-id]', function(ev){
+  if(ev.type === 'keydown' && ev.key !== 'Enter' && ev.key !== ' ') return;
+  ev.preventDefault();
+  var id = parseInt($(this).attr('data-id'), 10);
+  atFlush().then(function(){ selectEpreuve(id); });
+});
+$('#epreuveSearchInput').on('input', renderEpreuvesList);
+$('#atCatFilter').on('click', '.atChip', function(){
+  atCat = $(this).attr('data-c');
+  $('#atCatFilter .atChip').attr('aria-pressed', 'false');
+  $(this).attr('aria-pressed', 'true');
   renderEpreuvesList();
 });
 
-function selectEpreuve(id){
+// ---- Epreuve selectionnee ----
+function selectEpreuve(id, questionId){
   currentEpreuveId = id;
-  var epreuve = currentEpreuves.find(function(e){ return e.id === id; });
-  if(!epreuve) return;
-  $('#epreuveForm').prop('hidden', false);
-  $('#epreuveNameInput').val(epreuve.name);
-  $('#epreuveResponseTypeInput').val(epreuve.response_type);
-  $('#epreuveDefaultPointsInput').val(epreuve.default_points);
-  var validCategory = CATEGORY_ICONS.hasOwnProperty(epreuve.category) ? epreuve.category : 'cinema';
-  $('input[name=epreuveCategoryRadio]').prop('checked', false);
-  $('input[name=epreuveCategoryRadio][value="' + validCategory + '"]').prop('checked', true);
-  $('#epreuveTimerEnabledInput').prop('checked', !!epreuve.timer_enabled);
-  $('#epreuveTimerSecondsInput').val(epreuve.timer_seconds || 30);
-  $('#epreuveTimerSecondsBlock').prop('hidden', !epreuve.timer_enabled);
-  $('#epreuveHostNoteInput').val(epreuve.host_note || '');
-  $('#qcmOptionsBlock').prop('hidden', epreuve.response_type !== 'qcm');
-  resetQuestionForm();
-  renderQuestionsList(epreuve);
+  var e = curEpreuve();
+  $('#atEpMain, #atEditor').prop('hidden', !e);
+  $('#atEpEmpty').prop('hidden', !!e);
+  if(!e){ renderEpreuvesList(); return; }
+  currentQuestionId = questionId != null ? questionId : (e.questions.length ? e.questions[0].id : null);
+  fillEpreuveSettings(e);
+  renderEpreuveHeader();
+  renderQuestionsList();
+  renderQuestionEditor();
   renderEpreuvesList();
 }
-
-$( "#epreuveResponseTypeInput" ).on( "change", function(){
-  $('#qcmOptionsBlock').prop('hidden', $(this).val() !== 'qcm');
+function fillEpreuveSettings(e){
+  $('#epreuveNameInput').val(e.name);
+  $('#epreuveResponseTypeInput').val(e.response_type);
+  $('#epreuveCategoryInput').val(normCategory(e.category));
+  $('#epreuveDefaultPointsInput').val(e.default_points);
+  $('#epreuveTimerSecondsInput').val(e.timer_enabled ? e.timer_seconds : 0);
+  $('#epreuveHostNoteInput').val(e.host_note || '');
+}
+function renderEpreuveHeader(){
+  var e = curEpreuve(); if(!e) return;
+  var miss = missingAnswers(e);
+  $('#atEpTitle').text(e.name || 'Sans nom');
+  $('#atEpTags').html(
+    '<span class="atTag"><span class="atDot c-' + normCategory(e.category) + '"></span>' + CATEGORY_LABELS[normCategory(e.category)] + '</span>' +
+    '<span class="atTag at-' + e.response_type + '">' + RESPONSE_LABELS[e.response_type] + '</span>' +
+    '<span class="atTag">' + e.default_points + ' pts</span>' +
+    '<span class="atTag">' + (e.timer_enabled ? e.timer_seconds + ' s' : 'sans limite') + '</span>' +
+    (miss ? '<span class="atTag atWarn">' + plural(miss, 'réponse manquante', 'réponses manquantes') + '</span>' : ''));
+}
+$('#atToggleSettings').on('click', function(){
+  var open = $('#epreuveForm').prop('hidden');
+  $('#epreuveForm').prop('hidden', !open);
+  $(this).attr('aria-expanded', String(open));
 });
 
-$( "#epreuveTimerEnabledInput" ).on( "change", function(){
-  $('#epreuveTimerSecondsBlock').prop('hidden', !$(this).is(':checked'));
-});
-
-$( "#newEpreuveButton" ).on( "click", function(){
-  currentEpreuveId = null;
-  $('#epreuveForm').prop('hidden', false);
-  $('#epreuveNameInput').val('');
-  $('#epreuveResponseTypeInput').val('buzzer');
-  $('#epreuveDefaultPointsInput').val(10);
-  $('input[name=epreuveCategoryRadio]').prop('checked', false);
-  $('#epreuveCategoryCinema').prop('checked', true);
-  $('#epreuveTimerEnabledInput').prop('checked', false);
-  $('#epreuveTimerSecondsInput').val(30);
-  $('#epreuveTimerSecondsBlock').prop('hidden', true);
-  $('#epreuveHostNoteInput').val('');
-  $('#qcmOptionsBlock').prop('hidden', true);
-  $('#questionsList').html('<p class="text-muted">Enregistrez d\'abord l\'épreuve pour lui ajouter des questions.</p>');
-  $('#questionForm').hide();
+function epreuvePayload(e){
+  return { name: e.name, response_type: e.response_type, category: normCategory(e.category), default_points: e.default_points,
+    timer_enabled: !!e.timer_enabled, timer_seconds: e.timer_seconds || 30, host_note: e.host_note || '' };
+}
+function onEpreuveSettingsInput(){
+  var e = curEpreuve(); if(!e) return;
+  var typeChanged = $('#epreuveResponseTypeInput').val() !== e.response_type;
+  var seconds = parseInt($('#epreuveTimerSecondsInput').val(), 10) || 0;
+  e.name = $('#epreuveNameInput').val().trim() || e.name;
+  e.response_type = $('#epreuveResponseTypeInput').val();
+  e.category = $('#epreuveCategoryInput').val();
+  e.default_points = parseInt($('#epreuveDefaultPointsInput').val(), 10) || 10;
+  e.timer_enabled = seconds > 0 ? 1 : 0;
+  if(seconds > 0) e.timer_seconds = seconds;
+  e.host_note = $('#epreuveHostNoteInput').val().trim();
+  renderEpreuveHeader();
   renderEpreuvesList();
-});
+  if(typeChanged){ renderQuestionsList(); renderQuestionEditor(); }
+  var id = e.id;
+  atScheduleSave('ep' + id, function(){ return atApi('PUT', '/api/epreuves/' + id, epreuvePayload(e)); });
+}
+$('#epreuveForm').on('input change', 'input, select, textarea', onEpreuveSettingsInput);
 
-$( "#saveEpreuveButton" ).on( "click", function(){
-  var payload = {
-    name: $('#epreuveNameInput').val().trim(),
-    response_type: $('#epreuveResponseTypeInput').val(),
-    category: $('input[name=epreuveCategoryRadio]:checked').val() || 'cinema',
-    default_points: parseInt($('#epreuveDefaultPointsInput').val(), 10) || 10,
-    timer_enabled: $('#epreuveTimerEnabledInput').is(':checked'),
-    timer_seconds: parseInt($('#epreuveTimerSecondsInput').val(), 10) || 30,
-    host_note: $('#epreuveHostNoteInput').val().trim()
-  };
-  if(!payload.name){ showToast('Nom requis.', 'error'); return; }
-  var request = currentEpreuveId
-    ? fetch(BUZZ_SERVER_URL + '/api/epreuves/' + currentEpreuveId, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-    : fetch(BUZZ_SERVER_URL + '/api/epreuves', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-  request.then(function(r){ return r.json(); }).then(function(res){
-    if(res.id) currentEpreuveId = res.id;
-    loadEpreuves().then(function(){ selectEpreuve(currentEpreuveId); });
-    loadScenariosList();
+$('#newEpreuveButton').on('click', function(){
+  atFlush().then(function(){
+    return atApi('POST', '/api/epreuves', { name: 'Nouvelle épreuve', response_type: 'buzzer', category: 'cinema', default_points: 10, timer_enabled: false, timer_seconds: 30 });
+  }).then(function(res){
+    return loadEpreuves().then(function(){
+      atCat = 'all'; $('#atCatFilter .atChip').attr('aria-pressed', 'false').first().attr('aria-pressed', 'true');
+      $('#epreuveSearchInput').val('');
+      selectEpreuve(res.id);
+      $('#epreuveForm').prop('hidden', false);
+      $('#atToggleSettings').attr('aria-expanded', 'true');
+      $('#epreuveNameInput').trigger('focus').trigger('select');
+    });
   });
 });
 
-$( "#deleteEpreuveButton" ).on( "click", function(){
-  if(!currentEpreuveId) return;
-  confirmAction('Supprimer cette épreuve et toutes ses questions ?', function(){
-    fetch(BUZZ_SERVER_URL + '/api/epreuves/' + currentEpreuveId, { method: 'DELETE' }).then(function(){
-      currentEpreuveId = null;
-      $('#epreuveForm').prop('hidden', true);
-      loadEpreuves();
+$('#deleteEpreuveButton').on('click', function(){
+  var e = curEpreuve(); if(!e) return;
+  confirmAction('Supprimer l\'épreuve « ' + e.name + ' » et toutes ses questions ?', function(){
+    atRun(function(){ return atApi('DELETE', '/api/epreuves/' + e.id); }).then(function(){
+      return Promise.all([loadEpreuves(), loadScenariosForAtelier()]);
+    }).then(function(){
+      selectEpreuve(currentEpreuves.length ? currentEpreuves[0].id : null);
+      selectScenario(curScenario() ? currentScenarioId : (currentScenarios.length ? currentScenarios[0].id : null));
       loadScenariosList();
     });
   });
 });
 
-function renderQuestionsList(epreuve){
-  var $list = $('#questionsList');
-  $list.html('');
-  epreuve.questions.forEach(function(q, i){
-    var label = q.text ? q.text.slice(0, 40)
-      : (q.audio_path ? '🎵 ' + q.audio_path.split('/').pop()
-      : (q.media_url ? '🎵 ' + q.media_url.replace(/^https?:\/\/(www\.)?/, '')
-      : q.video_path ? '🎬 ' + q.video_path.split('/').pop()
-      : (q.images.length ? '🖼 ' + q.images.length + ' image(s)' : 'Question ' + (i + 1))));
-    var $row = $('<div class="questionRow" draggable="true"' + (q.id === currentQuestionId ? ' style="background: rgba(0,140,149,0.15);"' : '') + '></div>').attr('data-question-id', q.id);
-    $row.append('<span class="dragHandle" title="Glisser pour reordonner">⠿</span>');
-    $row.append('<span>' + (i + 1) + '. ' + label + (q.host_note ? ' 📝' : '') + '</span>');
-    $row.append($('<button type="button" class="btn btn-sm btn-outline-primary">✎</button>').on('click', function(){ editQuestion(q); }));
-    $row.append($('<button type="button" class="btn btn-sm btn-outline-secondary">↑</button>').on('click', function(){ moveQuestion(q.id, 'up'); }));
-    $row.append($('<button type="button" class="btn btn-sm btn-outline-secondary">↓</button>').on('click', function(){ moveQuestion(q.id, 'down'); }));
-    $row.append($('<button type="button" class="btn btn-sm btn-outline-danger">✗</button>').on('click', function(){ deleteQuestion(q.id); }));
-    $list.append($row);
+$('#duplicateEpreuveButton').on('click', function(){
+  var e = curEpreuve(); if(!e) return;
+  atFlush().then(function(){
+    return atRun(function(){
+      var payload = epreuvePayload(e); payload.name = e.name + ' (copie)';
+      return atApi('POST', '/api/epreuves', payload).then(function(res){
+        var chain = Promise.resolve();
+        e.questions.forEach(function(q){ chain = chain.then(function(){ return atApi('POST', '/api/epreuves/' + res.id + '/questions', questionPayload(e, q)); }); });
+        return chain.then(function(){ return res.id; });
+      }).then(function(newId){
+        return loadEpreuves().then(function(){ selectEpreuve(newId); });
+      });
+    });
   });
-  $('#questionForm').show();
+});
+
+// ---- Liste des questions ----
+function renderQuestionsList(){
+  var e = curEpreuve(); if(!e) return;
+  var $list = $('#questionsList');
+  if(!e.questions.length){
+    $list.html('<div class="atEmptyBox">Cette épreuve n\'a pas encore de question. Utilisez l\'ajout rapide ci-dessous.</div>');
+    return;
+  }
+  $list.html(e.questions.map(function(q, i){
+    var hasAnswer = qHasAnswer(e, q);
+    var answerLine = hasAnswer
+      ? 'Réponse : ' + escapeHtml((q.host_note || '').trim() || (q.qcm_options || [])[q.qcm_correct_index] || '')
+      : 'Réponse manquante';
+    var tags = (q.media_url ? '<span class="atTag">♪ lien</span>' : '') +
+      (q.audio_path ? '<span class="atTag">audio</span>' : '') +
+      (q.video_path ? '<span class="atTag">vidéo</span>' : '') +
+      (q.images.length ? '<span class="atTag">' + plural(q.images.length, 'image') + '</span>' : '');
+    return '<div class="atQRow" role="listitem" tabindex="0" draggable="true" data-question-id="' + q.id + '"' + (q.id === currentQuestionId ? ' aria-current="true"' : '') + '>' +
+      '<span class="atGrip" title="Glisser pour réordonner">⋮⋮</span><span class="atQNum">' + (i + 1) + '</span>' +
+      '<div class="atGrow"><div class="atQText">' + escapeHtml(questionLabel(q, i)) + '</div><div class="atQAns' + (hasAnswer ? '' : ' atMiss') + '">' + answerLine + '</div></div>' +
+      '<div class="atQMeta">' + tags + '</div>' +
+      '<span class="atMove"><button type="button" data-move="up" aria-label="Monter">↑</button><button type="button" data-move="down" aria-label="Descendre">↓</button></span></div>';
+  }).join(''));
+}
+$('#questionsList').on('click keydown', '.atQRow', function(ev){
+  if(ev.type === 'keydown' && ev.key !== 'Enter') return;
+  if($(ev.target).closest('[data-move]').length) return;
+  var id = parseInt($(this).attr('data-question-id'), 10);
+  if(id === currentQuestionId) return;
+  atFlush().then(function(){ currentQuestionId = id; renderQuestionsList(); renderQuestionEditor(); });
+});
+$('#questionsList').on('click', '[data-move]', function(ev){
+  ev.stopPropagation();
+  var id = parseInt($(this).closest('.atQRow').attr('data-question-id'), 10);
+  var direction = $(this).attr('data-move');
+  atFlush().then(function(){ return atApi('POST', '/api/questions/' + id + '/move', { direction: direction }); })
+    .then(function(){ return reloadKeepingSelection(); });
+});
+function reloadKeepingSelection(){
+  var eid = currentEpreuveId, qid = currentQuestionId;
+  return loadEpreuves().then(function(){ selectEpreuve(eid, qid); });
 }
 
-// Glisser-deposer pour reordonner les questions d'une epreuve (en plus des
-// fleches monter/descendre) : reorganise localement puis envoie l'ordre final
-// en un seul appel (voir /api/epreuves/:id/questions/reorder), plutot que de
-// simuler une suite d'echanges avec le voisin comme le ferait /move.
+// Glisser-deposer : reordonne les questions (envoie l'ordre final en un appel),
+// ou, si on depose des fichiers images, cree une question par image.
 var draggedQuestionId = null;
 $('#questionsList')
-  .on('dragstart', '.questionRow', function(){
+  .on('dragstart', '.atQRow', function(){
     draggedQuestionId = parseInt($(this).attr('data-question-id'), 10);
     $(this).addClass('dragging');
   })
-  .on('dragend', '.questionRow', function(){
+  .on('dragend', '.atQRow', function(){
     $(this).removeClass('dragging');
-    $('#questionsList .questionRow').removeClass('dragOver');
-  })
-  .on('dragover', '.questionRow', function(e){
-    e.preventDefault();
-    $(this).addClass('dragOver');
-  })
-  .on('dragleave', '.questionRow', function(){
-    $(this).removeClass('dragOver');
-  })
-  .on('drop', '.questionRow', function(e){
-    e.preventDefault();
-    var targetId = parseInt($(this).attr('data-question-id'), 10);
-    if(draggedQuestionId === null || draggedQuestionId === targetId) return;
-    var epreuve = currentEpreuves.find(function(ep){ return ep.id === currentEpreuveId; });
-    if(!epreuve) return;
-    var ids = epreuve.questions.map(function(q){ return q.id; });
-    var fromIndex = ids.indexOf(draggedQuestionId);
-    var toIndex = ids.indexOf(targetId);
-    if(fromIndex === -1 || toIndex === -1) return;
-    var moved = ids.splice(fromIndex, 1)[0];
-    ids.splice(toIndex, 0, moved);
+    $('#questionsList .atQRow').removeClass('dragOver');
     draggedQuestionId = null;
-    fetch(BUZZ_SERVER_URL + '/api/epreuves/' + currentEpreuveId + '/questions/reorder', {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ orderedIds: ids })
-    }).then(function(){ loadEpreuves().then(function(){ selectEpreuve(currentEpreuveId); }); });
-  });
-
-// Remet le formulaire de question en mode "nouvelle question" (utilise apres
-// ajout, apres annulation d'une edition, ou en changeant d'epreuve).
-function resetQuestionForm(){
-  currentQuestionId = null;
-  $('#questionFormTitle').text('Nouvelle question');
-  $('#questionTextInput').val('');
-  $('#questionImagesInput').val('');
-  $('#questionAudioInput').val('');
-  $('#questionVideoInput').val('');
-  $('#questionMediaUrlInput').val('');
-  $('#questionMediaStartInput').val('');
-  $('#questionImagesPreview').text('');
-  $('#questionAudioCurrent').text('');
-  $('#questionVideoCurrent').text('');
-  $('#qcmOptionsInput').val('');
-  $('#qcmCorrectIndexInput').val('');
-  $('#questionHostNoteInput').val('');
-  $('#questionHintInput').val('');
-  $('#saveQuestionButton').text('Ajouter la question');
-  $('#cancelEditQuestionButton').prop('hidden', true);
-}
-
-// Charge une question existante dans le formulaire pour correction (texte,
-// options QCM, note animateur) ou remplacement d'un media ; les medias non
-// touches sont conserves tels quels (voir saveQuestionButton plus bas).
-function editQuestion(q){
-  currentQuestionId = q.id;
-  $('#questionFormTitle').text('Modifier la question');
-  $('#questionTextInput').val(q.text || '');
-  $('#questionImagesInput').val('');
-  $('#questionAudioInput').val('');
-  $('#questionVideoInput').val('');
-  $('#questionMediaUrlInput').val(q.media_url || '');
-  $('#questionMediaStartInput').val(q.media_start || '');
-  $('#questionImagesPreview').text(q.images.length ? q.images.length + ' image(s) actuelle(s) conservee(s) si aucun nouveau fichier choisi' : '');
-  $('#questionAudioCurrent').text(q.audio_path ? 'Actuel : ' + q.audio_path.split('/').pop() : '');
-  $('#questionVideoCurrent').text(q.video_path ? 'Actuel : ' + q.video_path.split('/').pop() : '');
-  $('#qcmOptionsInput').val(q.qcm_options ? q.qcm_options.join('\n') : '');
-  $('#qcmCorrectIndexInput').val(q.qcm_correct_index != null ? q.qcm_correct_index : '');
-  $('#questionHostNoteInput').val(q.host_note || '');
-  $('#questionHintInput').val(q.hint || '');
-  $('#saveQuestionButton').text('Enregistrer les modifications');
-  $('#cancelEditQuestionButton').prop('hidden', false);
-  renderQuestionsList(currentEpreuves.find(function(e){ return e.id === currentEpreuveId; }));
-}
-
-$( "#cancelEditQuestionButton" ).on( "click", function(){
-  var epreuve = currentEpreuves.find(function(e){ return e.id === currentEpreuveId; });
-  resetQuestionForm();
-  if(epreuve) renderQuestionsList(epreuve);
+  })
+  .on('dragleave', '.atQRow', function(){ $(this).removeClass('dragOver'); });
+$('#questionsList').on('dragover', function(ev){
+  ev.preventDefault();
+  var $row = $(ev.target).closest('.atQRow');
+  if($row.length && draggedQuestionId !== null) $row.addClass('dragOver');
+});
+$('#questionsList').on('drop', function(ev){
+  ev.preventDefault();
+  var dt = ev.originalEvent.dataTransfer;
+  var e = curEpreuve(); if(!e) return;
+  if(draggedQuestionId === null){
+    var images = Array.from(dt.files || []).filter(function(f){ return /^image\//.test(f.type); });
+    if(images.length) addQuestionsFromImages(images);
+    return;
+  }
+  var targetId = parseInt($(ev.target).closest('.atQRow').attr('data-question-id'), 10);
+  var ids = e.questions.map(function(q){ return q.id; });
+  var from = ids.indexOf(draggedQuestionId), to = ids.indexOf(targetId);
+  draggedQuestionId = null;
+  if(from === -1 || to === -1 || from === to) return;
+  ids.splice(to, 0, ids.splice(from, 1)[0]);
+  atFlush().then(function(){
+    return atRun(function(){ return atApi('POST', '/api/epreuves/' + e.id + '/questions/reorder', { orderedIds: ids }); });
+  }).then(reloadKeepingSelection);
 });
 
-function moveQuestion(id, direction){
-  fetch(BUZZ_SERVER_URL + '/api/questions/' + id + '/move', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ direction: direction }) })
-    .then(function(){ loadEpreuves().then(function(){ selectEpreuve(currentEpreuveId); }); });
-}
-function deleteQuestion(id){
-  confirmAction('Supprimer cette question ?', function(){
-    fetch(BUZZ_SERVER_URL + '/api/questions/' + id, { method: 'DELETE' })
-      .then(function(){ loadEpreuves().then(function(){ selectEpreuve(currentEpreuveId); }); });
+// ---- Ajout rapide ----
+function addQuestions(items){
+  var e = curEpreuve(); if(!e || !items.length) return Promise.resolve();
+  return atFlush().then(function(){
+    return atRun(function(){
+      var lastId = null, chain = Promise.resolve();
+      items.forEach(function(it){
+        chain = chain.then(function(){
+          return atApi('POST', '/api/epreuves/' + e.id + '/questions', {
+            text: it.text || '', images: it.images || [], host_note: it.host_note || '', hint: ''
+          }).then(function(res){ lastId = res.id; });
+        });
+      });
+      return chain.then(function(){
+        return loadEpreuves().then(function(){ selectEpreuve(e.id, lastId); });
+      });
+    });
   });
 }
+function parseQuickLines(text){
+  return text.split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean).map(function(l){
+    var parts = l.split('|');
+    return { text: parts[0].trim(), host_note: parts.slice(1).join('|').trim() };
+  });
+}
+function submitQuickAdd(){
+  var items = parseQuickLines($('#atQuickInput').val());
+  if(!items.length) return;
+  $('#atQuickInput').val('');
+  addQuestions(items).then(function(){ $('#atQuickInput').trigger('focus'); });
+}
+$('#atQuickButton').on('click', submitQuickAdd);
+$('#atQuickInput').on('keydown', function(ev){ if(ev.key === 'Enter'){ ev.preventDefault(); submitQuickAdd(); } });
+$('#atQuickInput').on('paste', function(ev){
+  var text = (ev.originalEvent.clipboardData || window.clipboardData).getData('text');
+  if(text.indexOf('\n') === -1) return;
+  ev.preventDefault();
+  addQuestions(parseQuickLines(text));
+});
+function addQuestionsFromImages(files){
+  atStatus('Envoi des images…');
+  Promise.all(files.map(uploadFile)).then(function(urls){
+    return addQuestions(urls.map(function(u){ return { text: '', images: [u] }; }));
+  }).catch(function(){ showToast('Envoi des images impossible.', 'error'); });
+}
+
+// ---- Editeur de question ----
+function questionPayload(e, q){
+  var payload = {
+    text: q.text || '', images: q.images || [], audio_path: q.audio_path || null, video_path: q.video_path || null,
+    media_url: q.media_url || '', media_start: q.media_start || '', host_note: q.host_note || '', hint: q.hint || ''
+  };
+  if(e.response_type === 'qcm'){
+    var opts = q.qcm_options || [];
+    payload.qcm_options = opts;
+    if(typeof q.qcm_correct_index === 'number') payload.qcm_correct_index = q.qcm_correct_index;
+  }
+  return payload;
+}
+// Retire les choix vides et recalcule l'index de la bonne reponse avant envoi.
+function syncQcmFromEditor(q){
+  var opts = [], mapped = null;
+  atOpts.forEach(function(o, i){
+    if(!o.trim()) return;
+    if(i === atCorrect) mapped = opts.length;
+    opts.push(o.trim());
+  });
+  q.qcm_options = opts;
+  q.qcm_correct_index = mapped;
+}
+function saveQuestionLater(){
+  var e = curEpreuve(), q = curQuestion(); if(!e || !q) return;
+  if(e.response_type === 'qcm') syncQcmFromEditor(q);
+  $('#atEdState').text('Modifications en attente…');
+  atScheduleSave('q' + q.id, function(){
+    return atApi('PUT', '/api/questions/' + q.id, questionPayload(e, q)).then(function(){ $('#atEdState').text('Enregistré'); });
+  });
+}
+function saveQuestionNow(){
+  var e = curEpreuve(), q = curQuestion(); if(!e || !q) return Promise.resolve();
+  if(e.response_type === 'qcm') syncQcmFromEditor(q);
+  return atRun(function(){ return atApi('PUT', '/api/questions/' + q.id, questionPayload(e, q)); });
+}
+
+function renderQuestionEditor(){
+  var e = curEpreuve(), q = curQuestion();
+  $('#atEditor').toggleClass('atIdle', !q);
+  $('#atEditor .atPad, #atEditor .atFoot').prop('hidden', !q);
+  if(!e || !q){ $('#atEdTitle').text('Aucune question'); $('#atEdState').text(''); return; }
+  var index = e.questions.indexOf(q);
+  $('#atEdTitle').text('Question ' + (index + 1));
+  $('#atEdState').text('Enregistré');
+  $('#questionTextInput').val(q.text || '');
+  $('#questionHostNoteInput').val(q.host_note || '');
+  $('#questionMediaUrlInput').val(q.media_url || '');
+  $('#questionMediaStartInput').val(q.media_start || '');
+  $('#questionHintInput').val(q.hint || '');
+  var isQcm = e.response_type === 'qcm';
+  $('#qcmOptionsBlock').prop('hidden', !isQcm);
+  if(isQcm){
+    atOpts = (q.qcm_options && q.qcm_options.length) ? q.qcm_options.slice() : ['', '', '', ''];
+    atCorrect = typeof q.qcm_correct_index === 'number' ? q.qcm_correct_index : -1;
+    renderQcmOptions();
+  }
+  renderAttached();
+  renderPreview();
+}
+function renderQcmOptions(){
+  $('#atQcmOptions').html(atOpts.map(function(o, i){
+    return '<div class="atOpt' + (i === atCorrect ? ' atOk' : '') + '" data-i="' + i + '">' +
+      '<input type="radio" name="atCorrect" ' + (i === atCorrect ? 'checked' : '') + ' aria-label="Bonne réponse : choix ' + (i + 1) + '">' +
+      '<input type="text" class="form-control form-control-sm" value="' + escapeHtml(o) + '" placeholder="Choix ' + (i + 1) + '" aria-label="Choix ' + (i + 1) + '">' +
+      '<button type="button" class="atX" data-rm-opt aria-label="Retirer ce choix">✕</button></div>';
+  }).join(''));
+}
+$('#atQcmOptions').on('change', 'input[type=radio]', function(){
+  atCorrect = parseInt($(this).closest('.atOpt').attr('data-i'), 10);
+  $('#atQcmOptions .atOpt').each(function(i){ $(this).toggleClass('atOk', i === atCorrect); });
+  saveQuestionLater(); renderPreview(); renderQuestionsList();
+});
+$('#atQcmOptions').on('input', 'input[type=text]', function(){
+  atOpts[parseInt($(this).closest('.atOpt').attr('data-i'), 10)] = $(this).val();
+  saveQuestionLater(); renderPreview(); renderQuestionsList();
+});
+$('#atQcmOptions').on('click', '[data-rm-opt]', function(){
+  var i = parseInt($(this).closest('.atOpt').attr('data-i'), 10);
+  atOpts.splice(i, 1);
+  if(atCorrect === i) atCorrect = -1; else if(atCorrect > i) atCorrect--;
+  renderQcmOptions(); saveQuestionLater(); renderPreview();
+});
+$('#atAddOption').on('click', function(){
+  atOpts.push(''); renderQcmOptions();
+  $('#atQcmOptions .atOpt:last input[type=text]').trigger('focus');
+});
+
+$('#questionTextInput').on('input', function(){ var q = curQuestion(); if(!q) return; q.text = $(this).val(); saveQuestionLater(); renderPreview(); renderQuestionsList(); });
+$('#questionHostNoteInput').on('input', function(){
+  var q = curQuestion(); if(!q) return; q.host_note = $(this).val();
+  saveQuestionLater(); renderPreview(); renderQuestionsList(); renderEpreuveHeader(); renderEpreuvesList();
+});
+$('#questionHintInput').on('input', function(){ var q = curQuestion(); if(!q) return; q.hint = $(this).val(); saveQuestionLater(); });
+$('#questionMediaUrlInput').on('input', function(){ var q = curQuestion(); if(!q) return; q.media_url = $(this).val().trim(); saveQuestionLater(); renderPreview(); });
+$('#questionMediaStartInput').on('input', function(){ var q = curQuestion(); if(!q) return; q.media_start = parseInt($(this).val(), 10) || null; saveQuestionLater(); });
+
+// Medias : fichiers deposes ou choisis, envoyes aussitot ; chaque type a sa place
+// (plusieurs images, un audio, une video) et peut etre retire individuellement.
+function renderAttached(){
+  var q = curQuestion();
+  if(!q){ $('#atAttached').html(''); return; }
+  var items = [];
+  q.images.forEach(function(u, i){
+    items.push('<div class="atAttached"><img src="' + escapeHtml(BUZZ_SERVER_URL + u) + '" alt="" class="atThumb"><span class="atGrow">Image ' + (i + 1) + '</span><button type="button" class="atX" data-rm="img" data-i="' + i + '" aria-label="Retirer l\'image ' + (i + 1) + '">✕</button></div>');
+  });
+  if(q.audio_path) items.push('<div class="atAttached"><span class="atTag">Audio</span><span class="atGrow">' + escapeHtml(q.audio_path.split('/').pop()) + '</span><button type="button" class="atX" data-rm="audio" aria-label="Retirer l\'audio">✕</button></div>');
+  if(q.video_path) items.push('<div class="atAttached"><span class="atTag">Vidéo</span><span class="atGrow">' + escapeHtml(q.video_path.split('/').pop()) + '</span><button type="button" class="atX" data-rm="video" aria-label="Retirer la vidéo">✕</button></div>');
+  $('#atAttached').html(items.join(''));
+}
+$('#atAttached').on('click', '[data-rm]', function(){
+  var q = curQuestion(); if(!q) return;
+  var kind = $(this).attr('data-rm');
+  if(kind === 'img') q.images.splice(parseInt($(this).attr('data-i'), 10), 1);
+  if(kind === 'audio') q.audio_path = null;
+  if(kind === 'video') q.video_path = null;
+  renderAttached(); renderPreview(); renderQuestionsList(); saveQuestionLater();
+});
+function attachFiles(files){
+  var q = curQuestion(); if(!q) return;
+  files = Array.from(files || []);
+  if(!files.length) return;
+  atStatus('Envoi du fichier…');
+  Promise.all(files.map(function(f){ return uploadFile(f).then(function(url){ return { f: f, url: url }; }); })).then(function(results){
+    results.forEach(function(r){
+      if(/^image\//.test(r.f.type)) q.images.push(r.url);
+      else if(/^audio\//.test(r.f.type)) q.audio_path = r.url;
+      else if(/^video\//.test(r.f.type)) q.video_path = r.url;
+    });
+    renderAttached(); renderPreview(); renderQuestionsList();
+    return saveQuestionNow();
+  }).catch(function(){ showToast('Envoi du fichier impossible.', 'error'); });
+}
+$('#atBrowse').on('click', function(){ $('#atFileInput').trigger('click'); });
+$('#atFileInput').on('change', function(){ attachFiles(this.files); $(this).val(''); });
+$('#atDrop')
+  .on('dragover', function(ev){ ev.preventDefault(); $(this).addClass('dragOver'); })
+  .on('dragleave drop', function(){ $(this).removeClass('dragOver'); })
+  .on('drop', function(ev){ ev.preventDefault(); attachFiles(ev.originalEvent.dataTransfer.files); });
+
+// Apercu de ce que voient l'ecran de projection, les telephones et l'animateur.
+function renderPreview(){
+  var e = curEpreuve(), q = curQuestion();
+  var $pv = $('#atPreview');
+  $('#atPvSeg button').each(function(){ $(this).attr('aria-pressed', String($(this).attr('data-v') === atPreviewMode)); });
+  $pv.toggleClass('atPhone', atPreviewMode === 'phone');
+  if(!e || !q){ $pv.html(''); return; }
+  var opts = '';
+  if(e.response_type === 'qcm'){
+    opts = atOpts.filter(function(o){ return o.trim(); }).map(function(o) {
+      var correct = atOpts.indexOf(o) === atCorrect;
+      return '<div class="atPvOpt' + (atPreviewMode === 'host' && correct ? ' atOk' : '') + '">' + escapeHtml(o) + '</div>';
+    }).join('');
+  }
+  var text = escapeHtml(q.text || '…');
+  var media = (q.images.length ? '<div class="atPvOpt">' + plural(q.images.length, 'image') + '</div>' : '') +
+    (q.video_path ? '<div class="atPvOpt">Vidéo</div>' : '') + (q.audio_path ? '<div class="atPvOpt">Audio</div>' : '');
+  var html = '';
+  if(atPreviewMode === 'display') html = '<div class="atPvQ">' + text + '</div>' + (q.media_url ? '<div class="atPvLock">♪ Musique en cours (cachée)</div>' : '') + media + opts;
+  if(atPreviewMode === 'phone') html = '<div class="atPvLock">' + escapeHtml(e.name) + '</div><div class="atPvSmall">' + text + '</div>' + (opts || (e.response_type === 'buzzer' ? '<div class="atPvBuzz">BUZZ !</div>' : '<div class="atPvOpt">Votre réponse…</div>'));
+  if(atPreviewMode === 'host') html = '<div class="atPvLock">Vue animateur</div><div class="atPvSmall">' + text + '</div>' + opts +
+    '<div class="atPvOpt atPvAns"><b>Réponse :</b> ' + (qHasAnswer(e, q) ? escapeHtml((q.host_note || '').trim() || (q.qcm_options || [])[q.qcm_correct_index] || '') : '<i>à renseigner</i>') + '</div>';
+  $pv.html(html);
+}
+$('#atPvSeg').on('click', 'button', function(){ atPreviewMode = $(this).attr('data-v'); renderPreview(); });
+
+$('#atDeleteQuestion').on('click', function(){
+  var e = curEpreuve(), q = curQuestion(); if(!q) return;
+  confirmAction('Supprimer cette question ?', function(){
+    var idx = e.questions.indexOf(q);
+    atFlush().then(function(){ return atRun(function(){ return atApi('DELETE', '/api/questions/' + q.id); }); }).then(function(){
+      return loadEpreuves();
+    }).then(function(){
+      var fresh = curEpreuve();
+      var next = fresh && fresh.questions.length ? fresh.questions[Math.min(idx, fresh.questions.length - 1)].id : null;
+      selectEpreuve(currentEpreuveId, next);
+    });
+  });
+});
+$('#atDuplicateQuestion').on('click', function(){
+  var e = curEpreuve(), q = curQuestion(); if(!q) return;
+  atFlush().then(function(){
+    return atRun(function(){
+      return atApi('POST', '/api/epreuves/' + e.id + '/questions', questionPayload(e, q)).then(function(res){
+        return loadEpreuves().then(function(){ selectEpreuve(e.id, res.id); });
+      });
+    });
+  });
+});
 
 function uploadFile(file){
   var formData = new FormData();
@@ -2343,37 +2637,6 @@ function uploadFile(file){
   return fetch(BUZZ_SERVER_URL + '/api/upload', { method: 'POST', body: formData })
     .then(function(r){ return r.json(); }).then(function(res){ return res.url; });
 }
-
-$( "#saveQuestionButton" ).on( "click", function(){
-  if(!currentEpreuveId){ showToast('Enregistrez d\'abord l\'épreuve.', 'error'); return; }
-  var text = $('#questionTextInput').val().trim();
-  var imageFiles = $('#questionImagesInput')[0].files;
-  var audioFile = $('#questionAudioInput')[0].files[0];
-  var videoFile = $('#questionVideoInput')[0].files[0];
-  var epreuve = currentEpreuves.find(function(e){ return e.id === currentEpreuveId; });
-  var isQcm = epreuve && epreuve.response_type === 'qcm';
-  // En edition, une question deja existante fournit les valeurs de repli pour
-  // les medias non touches (aucun nouveau fichier choisi = on garde l'actuel).
-  var existing = currentQuestionId ? epreuve.questions.find(function(q){ return q.id === currentQuestionId; }) : null;
-
-  Promise.all([
-    imageFiles.length ? Promise.all(Array.from(imageFiles).map(uploadFile)) : Promise.resolve(existing ? existing.images : []),
-    audioFile ? uploadFile(audioFile) : Promise.resolve(existing ? existing.audio_path : null),
-    videoFile ? uploadFile(videoFile) : Promise.resolve(existing ? existing.video_path : null)
-  ]).then(function(results){
-    var payload = { text: text, images: results[0], audio_path: results[1], video_path: results[2], media_url: $('#questionMediaUrlInput').val().trim(), media_start: $('#questionMediaStartInput').val(), host_note: $('#questionHostNoteInput').val().trim(), hint: $('#questionHintInput').val().trim() };
-    if(isQcm){
-      payload.qcm_options = $('#qcmOptionsInput').val().split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
-      payload.qcm_correct_index = parseInt($('#qcmCorrectIndexInput').val(), 10);
-    }
-    return currentQuestionId
-      ? fetch(BUZZ_SERVER_URL + '/api/questions/' + currentQuestionId, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-      : fetch(BUZZ_SERVER_URL + '/api/epreuves/' + currentEpreuveId + '/questions', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-  }).then(function(){
-    resetQuestionForm();
-    loadEpreuves().then(function(){ selectEpreuve(currentEpreuveId); });
-  });
-});
 
 $( "#togglePlaylistImportButton" ).on( "click", function(){
   $('#playlistImportBlock').prop('hidden', function(i, v){ return !v; });
@@ -2402,10 +2665,6 @@ $( "#importPlaylistButton" ).on( "click", function(){
     .then(function(){ $btn.prop('disabled', false).text('Générer l\'épreuve'); });
 });
 
-$( "#manageEpreuvesButton" ).on( "click", function(){
-  loadEpreuves();
-  $('#manageEpreuvesModal').modal('show');
-});
 
 // ---- Message libre sur le display (texte/image/video/compte a rebours) ----
 $( "#openDisplayMessageModalButton" ).on( "click", function(){
@@ -2475,26 +2734,25 @@ $( "#openGameHistoryModalButton" ).on( "click", function(){
   $('#gameHistoryModal').modal('show');
 });
 
-// ---- Gerer les scenarios ----
+// ---- Atelier : scenarios ----
 let currentScenarioId = null;
 let currentScenarios = [];
-let chosenEpreuvesForScenario = [];
+let chosenEpreuvesForScenario = []; // { epreuve_id, response_type_override, default_points_override }
 
-function loadScenariosForModal(){
+function loadScenariosForAtelier(){
   return fetch(BUZZ_SERVER_URL + '/api/scenarios').then(function(r){ return r.json(); }).then(function(list){
     currentScenarios = list;
-    renderScenariosList();
   });
 }
+function curScenario(){ return currentScenarios.find(function(s){ return s.id === currentScenarioId; }) || null; }
+function epreuveById(id){ return currentEpreuves.find(function(e){ return e.id === id; }) || null; }
 
-function renderScenariosList(){
-  var $list = $('#scenariosList');
-  $list.html('');
-  currentScenarios.forEach(function(s){
-    var $row = $('<div class="epreuveRow' + (s.id === currentScenarioId ? ' active' : '') + '">' + s.name + ' <span class="text-muted">(' + s.epreuves.length + ' épreuves)</span></div>');
-    $row.on('click', function(){ selectScenario(s.id); });
-    $list.append($row);
-  });
+// Duree estimee d'une epreuve : temps de reponse (ou 30 s) + 25 s de lecture/correction par question.
+function estimateMinutes(e){
+  return e.questions.length * ((e.timer_enabled ? e.timer_seconds : 30) + 25) / 60;
+}
+function stepPoints(step, e){
+  return (typeof step.default_points_override === 'number' && step.default_points_override) ? step.default_points_override : e.default_points;
 }
 
 // Reglages par defaut du vote de l'epreuve suivante, propres au scenario
@@ -2507,7 +2765,6 @@ function fillScenarioVoteForm(settings){
   $('#scenarioVoteLiveInput').prop('checked', !!settings.live);
   $('#scenarioVoteAutoLaunchInput').prop('checked', !!settings.autoLaunch);
 }
-
 function readScenarioVoteForm(){
   return {
     auto: $('#scenarioVoteAutoInput').is(':checked'),
@@ -2519,148 +2776,237 @@ function readScenarioVoteForm(){
 }
 
 function selectScenario(id){
-  currentScenarioId = id;
-  var scenario = currentScenarios.find(function(s){ return s.id === id; });
-  if(!scenario) return;
-  $('#scenarioForm').prop('hidden', false);
+  var scenario = currentScenarios.find(function(s){ return s.id === id; }) || null;
+  currentScenarioId = scenario ? scenario.id : null;
+  $('#atScBody, #atScSide').prop('hidden', !scenario);
+  $('#atScEmptyAll').prop('hidden', !!scenario);
+  renderScenarioSelect();
+  if(!scenario){ renderScenarioLibrary(); return; }
   $('#scenarioNameInput').val(scenario.name);
   $('#scenarioShowMenuOnDisplayInput').prop('checked', scenario.show_menu_on_display !== 0);
   fillScenarioVoteForm(scenario.vote_settings);
   chosenEpreuvesForScenario = scenario.epreuves.map(function(se){
-    return { epreuve_id: se.epreuve_id, name: se.epreuve_name, response_type_override: se.response_type_override, default_points_override: se.default_points_override };
+    return { epreuve_id: se.epreuve_id, response_type_override: se.response_type_override, default_points_override: se.default_points_override };
   });
-  renderScenarioEpreuvesLists();
-  renderScenariosList();
+  renderScenarioView();
 }
-
-$( "#newScenarioButton" ).on( "click", function(){
-  currentScenarioId = null;
-  $('#scenarioForm').prop('hidden', false);
-  $('#scenarioNameInput').val('');
-  $('#scenarioShowMenuOnDisplayInput').prop('checked', true);
-  fillScenarioVoteForm(null);
-  chosenEpreuvesForScenario = [];
-  renderScenarioEpreuvesLists();
-  renderScenariosList();
+function renderScenarioSelect(){
+  $('#atScSelect').html(currentScenarios.map(function(s){
+    return '<option value="' + s.id + '"' + (s.id === currentScenarioId ? ' selected' : '') + '>' + escapeHtml(s.name) + '</option>';
+  }).join('')).prop('disabled', !currentScenarios.length);
+}
+$('#atScSelect').on('change', function(){
+  var id = parseInt($(this).val(), 10);
+  atFlush().then(function(){ selectScenario(id); });
 });
 
-// Detail utile pour choisir une epreuve en connaissance de cause (point 1) :
-// nombre de questions, type de reponse par defaut, points par defaut.
-function epreuveDetailsLabel(epreuveId, typeOverride, pointsOverride){
-  var epreuve = currentEpreuves.find(function(e){ return e.id === epreuveId; });
-  if(!epreuve) return '';
-  var questionCount = epreuve.questions ? epreuve.questions.length : 0;
-  var type = typeOverride || epreuve.response_type;
-  var points = (typeof pointsOverride === 'number' && pointsOverride) ? pointsOverride : epreuve.default_points;
-  return questionCount + ' question' + (questionCount !== 1 ? 's' : '') + ' · ' + type + ' · ' + points + ' pts';
+function renderScenarioView(){
+  renderScenarioLibrary();
+  renderScenarioSteps();
+  renderScenarioSummary();
 }
 
-// Descriptif pour l'animateur (host_note de l'epreuve) : utile pour choisir en
-// connaissance de cause quel type d'epreuve on ajoute a un scenario.
-function epreuveHostNoteLine(epreuveId){
-  var epreuve = currentEpreuves.find(function(e){ return e.id === epreuveId; });
-  if(!epreuve || !epreuve.host_note) return '';
-  return '<div class="text-muted small fst-italic">📋 ' + epreuve.host_note + '</div>';
+function renderScenarioLibrary(){
+  var query = ($('#atScSearch').val() || '').trim().toLowerCase();
+  var list = currentEpreuves.filter(function(e){ return e.name.toLowerCase().indexOf(query) !== -1; });
+  var chosenIds = chosenEpreuvesForScenario.map(function(s){ return s.epreuve_id; });
+  $('#atScLib').html(list.length ? list.map(function(e){
+    var used = currentScenarioId && chosenIds.indexOf(e.id) !== -1;
+    return '<li tabindex="0" data-id="' + e.id + '"><span class="atDot c-' + normCategory(e.category) + '"></span>' +
+      '<div><div class="atName">' + escapeHtml(e.name) + '</div><div class="atMeta">' + RESPONSE_LABELS[e.response_type] + ' · ' + plural(e.questions.length, 'question') + ' · ~' + Math.max(1, Math.round(estimateMinutes(e))) + ' min' +
+      (e.host_note ? ' · ' + escapeHtml(e.host_note.slice(0, 60)) : '') + '</div></div>' +
+      '<span class="atBtn atSm">' + (used ? '+ encore' : '+ Ajouter') + '</span></li>';
+  }).join('') : '<li class="atNone">Aucune épreuve.</li>');
 }
+$('#atScSearch').on('input', renderScenarioLibrary);
+$('#atScLib').on('click keydown', 'li[data-id]', function(ev){
+  if(ev.type === 'keydown' && ev.key !== 'Enter' && ev.key !== ' ') return;
+  ev.preventDefault();
+  if(!currentScenarioId){ showToast('Créez ou choisissez d\'abord un scénario.', 'error'); return; }
+  chosenEpreuvesForScenario.push({ epreuve_id: parseInt($(this).attr('data-id'), 10), response_type_override: null, default_points_override: null });
+  onScenarioChanged();
+});
 
-function renderScenarioEpreuvesLists(){
-  var $available = $('#availableEpreuvesList');
-  $available.html('');
-  var chosenIds = chosenEpreuvesForScenario.map(function(e){ return e.epreuve_id; });
-  currentEpreuves.forEach(function(e){
-    if(chosenIds.indexOf(e.id) !== -1) return;
-    var $row = $('<div class="questionRow"><span>' + categoryIcon(e.category) + ' ' + e.name + ' <span class="text-muted small">(' + epreuveDetailsLabel(e.id) + ')</span>' + epreuveHostNoteLine(e.id) + '</span></div>');
-    $row.append($('<button type="button" class="btn btn-sm btn-outline-primary">Ajouter →</button>').on('click', function(){
-      chosenEpreuvesForScenario.push({ epreuve_id: e.id, name: e.name, response_type_override: null, default_points_override: null });
-      renderScenarioEpreuvesLists();
-    }));
-    $available.append($row);
-  });
-
-  var $chosen = $('#chosenEpreuvesList');
-  $chosen.html('');
-  chosenEpreuvesForScenario.forEach(function(e, i){
-    var $row = $('<div class="questionRow" draggable="true"></div>').attr('data-index', i);
-    $row.append('<span class="dragHandle" title="Glisser pour reordonner">⠿</span>');
-    $row.append('<span>' + (i + 1) + '. ' + e.name + ' <span class="text-muted small">(' + epreuveDetailsLabel(e.epreuve_id, e.response_type_override, e.default_points_override) + ')</span>' + epreuveHostNoteLine(e.epreuve_id) + '</span>');
-    $row.append($('<button type="button" class="btn btn-sm btn-outline-secondary">↑</button>').on('click', function(){
-      if(i > 0){ var tmp = chosenEpreuvesForScenario[i-1]; chosenEpreuvesForScenario[i-1] = chosenEpreuvesForScenario[i]; chosenEpreuvesForScenario[i] = tmp; renderScenarioEpreuvesLists(); }
-    }));
-    $row.append($('<button type="button" class="btn btn-sm btn-outline-secondary">↓</button>').on('click', function(){
-      if(i < chosenEpreuvesForScenario.length - 1){ var tmp = chosenEpreuvesForScenario[i+1]; chosenEpreuvesForScenario[i+1] = chosenEpreuvesForScenario[i]; chosenEpreuvesForScenario[i] = tmp; renderScenarioEpreuvesLists(); }
-    }));
-    $row.append($('<button type="button" class="btn btn-sm btn-outline-danger">Retirer</button>').on('click', function(){
-      chosenEpreuvesForScenario.splice(i, 1); renderScenarioEpreuvesLists();
-    }));
-    $chosen.append($row);
-  });
+function renderScenarioSteps(){
+  var $list = $('#atScOrder');
+  $('#atScEmpty').prop('hidden', chosenEpreuvesForScenario.length > 0);
+  var vote = readScenarioVoteForm();
+  var html = chosenEpreuvesForScenario.map(function(step, i){
+    var e = epreuveById(step.epreuve_id);
+    if(!e) return '';
+    var miss = missingAnswers(e);
+    var link = '';
+    if(i < chosenEpreuvesForScenario.length - 1){
+      link = '<li class="atVoteLink' + (vote.auto ? '' : ' atOff') + '" aria-hidden="true">' +
+        (vote.auto ? 'Vote : ' + (vote.count ? vote.count + ' au hasard' : 'toutes les restantes') + ' · ' + (vote.duration ? vote.duration + ' s' : 'clôture manuelle') : 'Choix manuel de l\'animateur') + '</li>';
+    }
+    return '<li class="atStep" draggable="true" data-index="' + i + '">' +
+      '<span class="atStepNo">' + (i + 1) + '</span><span class="atGrip" title="Glisser pour réordonner">⋮⋮</span>' +
+      '<div class="atGrow"><div class="atStepName">' + categoryIcon(e.category) + ' ' + escapeHtml(e.name) + '</div>' +
+      '<div class="atStepMeta">' + RESPONSE_LABELS[step.response_type_override || e.response_type] + ' · ' + plural(e.questions.length, 'question') + ' · ~' + Math.max(1, Math.round(estimateMinutes(e))) + ' min' +
+      (miss ? ' · <span class="atWarnText">' + plural(miss, 'sans réponse', 'sans réponse') + '</span>' : '') + '</div></div>' +
+      '<label class="atStepPts">pts <input type="number" min="1" class="form-control form-control-sm" value="' + stepPoints(step, e) + '" data-pts aria-label="Points par question"></label>' +
+      '<span class="atActs"><button type="button" data-up aria-label="Monter">↑</button><button type="button" data-down aria-label="Descendre">↓</button><button type="button" data-rm aria-label="Retirer du scénario">✕</button></span></li>' + link;
+  }).join('');
+  $list.html(html);
 }
+function stepIndex(el){ return parseInt($(el).closest('.atStep').attr('data-index'), 10); }
+$('#atScOrder').on('click', '[data-up]', function(){
+  var i = stepIndex(this); if(i <= 0) return;
+  var a = chosenEpreuvesForScenario; var t = a[i-1]; a[i-1] = a[i]; a[i] = t; onScenarioChanged();
+});
+$('#atScOrder').on('click', '[data-down]', function(){
+  var i = stepIndex(this), a = chosenEpreuvesForScenario; if(i >= a.length - 1) return;
+  var t = a[i+1]; a[i+1] = a[i]; a[i] = t; onScenarioChanged();
+});
+$('#atScOrder').on('click', '[data-rm]', function(){
+  chosenEpreuvesForScenario.splice(stepIndex(this), 1); onScenarioChanged();
+});
+$('#atScOrder').on('change', '[data-pts]', function(){
+  var step = chosenEpreuvesForScenario[stepIndex(this)], e = step && epreuveById(step.epreuve_id);
+  if(!e) return;
+  var value = parseInt($(this).val(), 10);
+  step.default_points_override = (value && value !== e.default_points) ? value : null;
+  onScenarioChanged();
+});
 
-// Glisser-deposer pour reordonner les epreuves choisies d'un scenario (en
-// plus des fleches monter/descendre, gardees pour l'accessibilite/le tactile).
-// Delegue sur le conteneur (les lignes sont recreees a chaque rendu) : pas
-// besoin de re-attacher ces ecouteurs a chaque appel de renderScenarioEpreuvesLists.
-var draggedEpreuveIndex = null;
-$('#chosenEpreuvesList')
-  .on('dragstart', '.questionRow', function(e){
-    draggedEpreuveIndex = parseInt($(this).attr('data-index'), 10);
+// Glisser-deposer pour reordonner les etapes (fleches gardees pour le tactile).
+var draggedStepIndex = null;
+$('#atScOrder')
+  .on('dragstart', '.atStep', function(ev){
+    draggedStepIndex = parseInt($(this).attr('data-index'), 10);
     $(this).addClass('dragging');
-    e.originalEvent.dataTransfer.effectAllowed = 'move';
+    ev.originalEvent.dataTransfer.effectAllowed = 'move';
   })
-  .on('dragend', '.questionRow', function(){
+  .on('dragend', '.atStep', function(){
     $(this).removeClass('dragging');
-    $('#chosenEpreuvesList .questionRow').removeClass('dragOver');
+    $('#atScOrder .atStep').removeClass('dragOver');
+    draggedStepIndex = null;
   })
-  .on('dragover', '.questionRow', function(e){
-    e.preventDefault(); // necessaire pour autoriser le drop
-    $(this).addClass('dragOver');
-  })
-  .on('dragleave', '.questionRow', function(){
-    $(this).removeClass('dragOver');
-  })
-  .on('drop', '.questionRow', function(e){
-    e.preventDefault();
-    var targetIndex = parseInt($(this).attr('data-index'), 10);
-    if(draggedEpreuveIndex === null || draggedEpreuveIndex === targetIndex) return;
-    var moved = chosenEpreuvesForScenario.splice(draggedEpreuveIndex, 1)[0];
-    chosenEpreuvesForScenario.splice(targetIndex, 0, moved);
-    draggedEpreuveIndex = null;
-    renderScenarioEpreuvesLists();
+  .on('dragover', '.atStep', function(ev){ ev.preventDefault(); $(this).addClass('dragOver'); })
+  .on('dragleave', '.atStep', function(){ $(this).removeClass('dragOver'); })
+  .on('drop', '.atStep', function(ev){
+    ev.preventDefault();
+    var target = parseInt($(this).attr('data-index'), 10);
+    if(draggedStepIndex === null || draggedStepIndex === target) return;
+    var moved = chosenEpreuvesForScenario.splice(draggedStepIndex, 1)[0];
+    chosenEpreuvesForScenario.splice(target, 0, moved);
+    draggedStepIndex = null;
+    onScenarioChanged();
   });
 
-$( "#saveScenarioButton" ).on( "click", function(){
-  var name = $('#scenarioNameInput').val().trim();
-  if(!name){ showToast('Nom requis.', 'error'); return; }
-  var payload = { name: name, show_menu_on_display: $('#scenarioShowMenuOnDisplayInput').is(':checked'), vote_settings: readScenarioVoteForm(), epreuves: chosenEpreuvesForScenario.map(function(e){
-    return { epreuve_id: e.epreuve_id, response_type_override: e.response_type_override, default_points_override: e.default_points_override };
-  }) };
-  var request = currentScenarioId
-    ? fetch(BUZZ_SERVER_URL + '/api/scenarios/' + currentScenarioId, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-    : fetch(BUZZ_SERVER_URL + '/api/scenarios', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-  request.then(function(r){ return r.json(); }).then(function(res){
-    if(res.id) currentScenarioId = res.id;
-    loadScenariosForModal();
-    loadScenariosList();
+function renderScenarioSummary(){
+  var steps = chosenEpreuvesForScenario.map(function(s){ return { step: s, e: epreuveById(s.epreuve_id) }; }).filter(function(x){ return x.e; });
+  var minutes = steps.reduce(function(sum, x){ return sum + estimateMinutes(x.e); }, 0);
+  var questions = steps.reduce(function(sum, x){ return sum + x.e.questions.length; }, 0);
+  var points = steps.reduce(function(sum, x){ return sum + x.e.questions.length * stepPoints(x.step, x.e); }, 0);
+  $('#atSumDur').text(Math.round(minutes));
+  $('#atSumQ').text(questions);
+  $('#atSumPts').text(points);
+  var missing = steps.reduce(function(sum, x){ return sum + missingAnswers(x.e); }, 0);
+  var ids = chosenEpreuvesForScenario.map(function(s){ return s.epreuve_id; });
+  var checks = [];
+  if(!steps.length) checks.push(['w', '!', 'Le scénario est vide']);
+  checks.push(missing ? ['w', '!', plural(missing, 'question sans réponse', 'questions sans réponse') + ' pour l\'animateur'] : ['g', '✓', 'Toutes les réponses sont renseignées']);
+  checks.push(new Set(ids).size !== ids.length ? ['w', '!', 'Une épreuve apparaît plusieurs fois'] : ['g', '✓', 'Pas de doublon']);
+  checks.push(steps.some(function(x){ return x.e.questions.length === 0; }) ? ['w', '!', 'Une épreuve n\'a aucune question']
+    : (steps.some(function(x){ return x.e.questions.length < 3; }) ? ['w', '!', 'Une épreuve a moins de 3 questions'] : ['g', '✓', 'Chaque épreuve a au moins 3 questions']));
+  $('#atScCheck').html(checks.map(function(c){
+    return '<li><span class="atCk ' + c[0] + '">' + c[1] + '</span><span>' + c[2] + '</span></li>';
+  }).join(''));
+}
+
+// ---- Enregistrement automatique du scenario ----
+function scenarioPayload(){
+  return { name: $('#scenarioNameInput').val().trim() || 'Sans nom',
+    show_menu_on_display: $('#scenarioShowMenuOnDisplayInput').is(':checked'),
+    vote_settings: readScenarioVoteForm(),
+    epreuves: chosenEpreuvesForScenario.map(function(s){
+      return { epreuve_id: s.epreuve_id, response_type_override: s.response_type_override, default_points_override: s.default_points_override };
+    }) };
+}
+function onScenarioChanged(){
+  var scenario = curScenario(); if(!scenario) return;
+  var payload = scenarioPayload();
+  scenario.name = payload.name;
+  scenario.show_menu_on_display = payload.show_menu_on_display ? 1 : 0;
+  scenario.vote_settings = payload.vote_settings;
+  scenario.epreuves = payload.epreuves.map(function(p){ return $.extend({}, p); });
+  renderScenarioView();
+  var id = scenario.id;
+  atScheduleSave('sc' + id, function(){
+    return atApi('PUT', '/api/scenarios/' + id, payload).then(function(){ loadScenariosList(); });
+  });
+}
+$('#scenarioNameInput').on('input', function(){
+  var scenario = curScenario(); if(!scenario) return;
+  scenario.name = $(this).val().trim() || 'Sans nom';
+  $('#atScSelect option:selected').text(scenario.name);
+  onScenarioChanged();
+});
+$('#atScSide').on('input change', 'input, select', onScenarioChanged);
+
+$('#newScenarioButton').on('click', function(){
+  atFlush().then(function(){
+    return atApi('POST', '/api/scenarios', { name: 'Nouveau scénario', show_menu_on_display: true, epreuves: [] });
+  }).then(function(res){
+    return loadScenariosForAtelier().then(function(){ selectScenario(res.id); loadScenariosList(); $('#scenarioNameInput').trigger('focus').trigger('select'); });
   });
 });
-
-$( "#deleteScenarioButton" ).on( "click", function(){
-  if(!currentScenarioId) return;
-  confirmAction('Supprimer ce scénario ?', function(){
-    fetch(BUZZ_SERVER_URL + '/api/scenarios/' + currentScenarioId, { method: 'DELETE' }).then(function(){
-      currentScenarioId = null;
-      $('#scenarioForm').prop('hidden', true);
-      loadScenariosForModal();
+$('#atScDuplicate').on('click', function(){
+  var scenario = curScenario(); if(!scenario) return;
+  atFlush().then(function(){
+    var payload = scenarioPayload(); payload.name = payload.name + ' (copie)';
+    return atApi('POST', '/api/scenarios', payload);
+  }).then(function(res){
+    return loadScenariosForAtelier().then(function(){ selectScenario(res.id); loadScenariosList(); });
+  });
+});
+$('#deleteScenarioButton').on('click', function(){
+  var scenario = curScenario(); if(!scenario) return;
+  confirmAction('Supprimer le scénario « ' + scenario.name + ' » ?', function(){
+    atFlush().then(function(){ return atApi('DELETE', '/api/scenarios/' + scenario.id); }).then(function(){
+      return loadScenariosForAtelier();
+    }).then(function(){
+      selectScenario(currentScenarios.length ? currentScenarios[0].id : null);
       loadScenariosList();
     });
   });
 });
-
-$( "#manageScenariosButton" ).on( "click", function(){
-  Promise.all([loadEpreuves(), loadScenariosForModal()]).then(function(){
-    $('#manageScenariosModal').modal('show');
+$('#atScLaunch').on('click', function(){
+  var scenario = curScenario(); if(!scenario) return;
+  atFlush().then(function(){
+    $('#atelierModal').modal('hide');
+    $('#scenarioSelect').val(String(scenario.id));
+    $('#launchScenarioButton').trigger('click');
   });
 });
+
+// ---- Ouverture / onglets de l'atelier ----
+function atShowTab(tab){
+  $('.atTab').each(function(){ $(this).attr('aria-selected', String($(this).attr('data-tab') === tab)); });
+  $('#atelierEp').prop('hidden', tab !== 'ep');
+  $('#atelierSc').prop('hidden', tab !== 'sc');
+  if(tab === 'sc') renderScenarioView();
+  else renderEpreuvesList();
+}
+$('.atTab').on('click', function(){
+  var tab = $(this).attr('data-tab');
+  atFlush().then(function(){ atShowTab(tab); });
+});
+function openAtelier(tab){
+  Promise.all([loadEpreuves(), loadScenariosForAtelier()]).then(function(){
+    selectEpreuve(curEpreuve() ? currentEpreuveId : (currentEpreuves.length ? currentEpreuves[0].id : null));
+    selectScenario(curScenario() ? currentScenarioId : (currentScenarios.length ? currentScenarios[0].id : null));
+    atShowTab(tab);
+    atStatus('Enregistré');
+    $('#atelierModal').modal('show');
+  });
+}
+$( "#manageEpreuvesButton" ).on( "click", function(){ openAtelier('ep'); });
+$( "#manageScenariosButton" ).on( "click", function(){ openAtelier('sc'); });
+$('#atelierModal').on('hide.bs.modal', function(){ atFlush(); });
+$('#atelierModal').on('hidden.bs.modal', function(){ loadScenariosList(); });
 
 $( "#openHelpModalButton" ).on( "click", function(){
   $('#helpModal').modal('show');

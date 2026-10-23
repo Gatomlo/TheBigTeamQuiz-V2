@@ -1684,3 +1684,157 @@ body.mode-control .teamPhoneBtn[hidden],body.mode-control .phoneBtn[hidden]{disp
 /* Lecteur YouTube/Spotify integre : joue le son, jamais visible (ni video ni titre). */
 .questionEmbedHost{position:fixed;left:-9999px;top:0;width:200px;height:200px;overflow:hidden;pointer-events:none}
 .questionEmbedBar{display:flex;align-items:center;gap:.6rem;margin:.4rem 0}
+
+/* ---- ATELIER : epreuves, questions et scenarios (modale plein ecran, mode gestionnaire) ---- */
+#atelierModal{ --bs-modal-bg: var(--bg); --bs-modal-color: var(--fg); }
+#atelierModal .modal-content.atelier{ background: var(--bg); color: var(--fg); border: 0; border-radius: 0; }
+#atelierModal .c-cinema{ background:#C2543B; } #atelierModal .c-musique{ background:#7A5BB5; }
+#atelierModal .c-culture_g{ background:var(--teal); } #atelierModal .c-culture_e{ background:#3E7DB5; }
+#atelierModal .atTop{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; padding:10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); background:linear-gradient(var(--leather), #0F0A07); color:var(--leather-fg); }
+#atelierModal .atBrand{ font-family:var(--f-display); font-size:32px; line-height:1; color:var(--pb); letter-spacing:.02em; font-weight:700; }
+#atelierModal .atTabs{ display:flex; gap:4px; flex:1; min-width:0; flex-wrap:wrap; }
+#atelierModal .atTab{ background:none; border:0; color:var(--leather-fg); opacity:.7; padding:8px 14px; border-radius:8px; font-weight:600; }
+#atelierModal .atTab[aria-selected="true"]{ opacity:1; background:rgba(255,255,255,.1); box-shadow:inset 0 -2px 0 var(--pb); }
+#atelierModal .atSave{ font-size:12px; opacity:.7; }
+#atelierModal .atClose{ border:1px solid var(--leather-line); background:none; color:var(--leather-fg); padding:6px 12px; border-radius:8px; }
+#atelierModal .atBody{ flex:1; overflow:auto; padding:16px max(16px, env(safe-area-inset-right, 0px)) 32px max(16px, env(safe-area-inset-left, 0px)); }
+
+#atelierModal .atCols{ display:grid; gap:16px; align-items:start; }
+#atelierModal .atCols[hidden]{ display:none; }
+#atelierModal .atEp{ grid-template-columns:260px minmax(0,1fr) 400px; }
+#atelierModal .atSc{ grid-template-columns:300px minmax(0,1fr) 310px; }
+@media (max-width:1180px){
+  #atelierModal .atEp{ grid-template-columns:240px minmax(0,1fr); }
+  #atelierModal .atEp > .atEditor, #atelierModal .atEp > .atEmpty{ grid-column:1 / -1; }
+  #atelierModal .atSc{ grid-template-columns:260px minmax(0,1fr); }
+  #atelierModal .atSc > .atSide{ grid-column:1 / -1; }
+}
+@media (max-width:760px){ #atelierModal .atEp, #atelierModal .atSc{ grid-template-columns:minmax(0,1fr); } }
+
+#atelierModal .atPanel{ background:var(--surface); border:1px solid var(--line); border-radius:12px; min-width:0; }
+#atelierModal .atPanel > header{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+#atelierModal h2{ font-family:var(--f-display); font-size:28px; font-weight:700; margin:0; line-height:1; letter-spacing:.02em; }
+#atelierModal h3{ margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:700; }
+#atelierModal .atPad{ padding:14px; }
+#atelierModal .atBorderTop{ border-top:1px solid var(--line); }
+#atelierModal .atBorderBottom{ border-bottom:1px solid var(--line); }
+#atelierModal .atStack{ display:grid; gap:8px; }
+#atelierModal .atGrow{ flex:1; min-width:0; }
+#atelierModal .atRow{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+#atelierModal .atRowEnd{ margin-top:10px; }
+#atelierModal .atTwo{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+#atelierModal .atHelp{ font-size:12px; color:var(--muted); margin:6px 0 0; }
+#atelierModal .atEmpty, #atelierModal .atEmptyBox{ padding:24px; text-align:center; color:var(--muted); }
+#atelierModal .atEmptyBox{ border:1.5px dashed var(--line); border-radius:10px; margin:14px; }
+#atelierModal .atFirst{ margin-top:0 !important; }
+#atelierModal .atLbl{ display:block; font-size:12px; font-weight:700; margin:12px 0 4px; }
+#atelierModal .atLbl small, #atelierModal .atSwitch small{ font-weight:400; color:var(--muted); }
+#atelierModal .atMini{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; display:block; }
+#atelierModal .atCheck{ display:flex; gap:8px; align-items:center; font-size:13px; }
+
+#atelierModal .atBtn{ border:1px solid var(--line); background:var(--surface-2); color:var(--fg); padding:6px 12px; border-radius:8px; font-weight:600; font-size:13px; cursor:pointer; }
+#atelierModal .atBtn:hover{ border-color:var(--teal); }
+#atelierModal .atBtn.atPri{ background:var(--pb); border-color:var(--pb); color:#1B1410; }
+#atelierModal .atBtn.atSm{ padding:3px 9px; font-size:12px; }
+#atelierModal .atBtn.atDel{ color:var(--bad); }
+
+#atelierModal .atChips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+#atelierModal .atChip{ border:1px solid var(--line); background:none; color:var(--fg); border-radius:99px; padding:3px 10px; font-size:12px; font-weight:600; }
+#atelierModal .atChip[aria-pressed="true"]{ background:var(--fg); color:var(--bg); border-color:var(--fg); }
+#atelierModal .atTag{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; background:var(--surface-2); border:1px solid var(--line); white-space:nowrap; }
+#atelierModal .atTag.at-buzzer{ background:rgba(255,147,79,.18); border-color:transparent; color:var(--sand); }
+#atelierModal .atTag.at-qcm{ background:var(--teal-soft); border-color:transparent; color:var(--good); }
+#atelierModal .atTag.atWarn{ background:var(--bad-soft); border-color:transparent; color:var(--bad); }
+#atelierModal .atDot{ width:9px; height:9px; border-radius:50%; flex:none; display:inline-block; }
+#atelierModal .atWarnText{ color:var(--bad); font-weight:600; }
+
+#atelierModal .atLib{ list-style:none; margin:0; padding:6px; display:grid; gap:2px; max-height:52vh; overflow:auto; }
+#atelierModal .atLib li{ display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; align-items:center; padding:8px; border-radius:8px; cursor:pointer; border:1px solid transparent; }
+#atelierModal .atLib li:hover{ background:var(--surface-2); }
+#atelierModal .atLib li[aria-current="true"]{ background:rgba(255,147,79,.16); border-color:var(--pb); }
+#atelierModal .atLib li.atNone{ display:block; cursor:default; color:var(--muted); }
+#atelierModal .atName{ font-weight:600; overflow-wrap:anywhere; }
+#atelierModal .atMeta{ font-size:11px; color:var(--muted); overflow-wrap:anywhere; }
+#atelierModal .atCnt{ font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+#atelierModal .atImport{ display:grid; gap:6px; border:1px solid var(--line); border-radius:10px; padding:10px; }
+#atelierModal .atImport[hidden]{ display:none; }
+#atelierModal .atImport .atTwo{ gap:6px; }
+
+#atelierModal .atSettings{ padding:14px; background:var(--surface-2); border-bottom:1px solid var(--line); }
+#atelierModal .atSettings[hidden]{ display:none; }
+
+#atelierModal .atQRow{ display:grid; grid-template-columns:20px 34px minmax(0,1fr) auto auto; gap:10px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--line); cursor:pointer; }
+#atelierModal .atQRow:hover{ background:var(--surface-2); }
+#atelierModal .atQRow[aria-current="true"]{ background:rgba(255,147,79,.16); box-shadow:inset 3px 0 0 var(--pb); }
+#atelierModal .atQRow.dragging, #atelierModal .atStep.dragging{ opacity:.4; }
+#atelierModal .atQRow.dragOver, #atelierModal .atStep.dragOver{ border-top:3px solid var(--pb); }
+#atelierModal .atGrip{ color:var(--muted); cursor:grab; letter-spacing:-2px; user-select:none; }
+#atelierModal .atQNum{ font-family:var(--f-display); font-size:26px; color:var(--muted); text-align:center; line-height:1; }
+#atelierModal .atQText{ font-weight:600; overflow-wrap:anywhere; }
+#atelierModal .atQAns{ font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
+#atelierModal .atQAns.atMiss{ color:var(--bad); font-weight:700; }
+#atelierModal .atQMeta{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+#atelierModal .atMove{ display:flex; flex-direction:column; }
+#atelierModal .atMove button, #atelierModal .atActs button, #atelierModal .atX{ border:0; background:none; color:var(--muted); padding:0 6px; font-size:14px; line-height:1.3; }
+#atelierModal .atMove button:hover, #atelierModal .atActs button:hover, #atelierModal .atX:hover{ color:var(--fg); }
+@media (max-width:760px){ #atelierModal .atQMeta{ display:none; } #atelierModal .atQRow{ grid-template-columns:20px 28px minmax(0,1fr) auto; } }
+#atelierModal .atQuick{ border-top:1px solid var(--line); padding:12px 14px; background:var(--surface-2); border-radius:0 0 12px 12px; }
+#atelierModal .atQuick h3{ margin-bottom:8px; }
+
+#atelierModal .atEditor{ position:sticky; top:0; max-height:calc(100vh - 100px); overflow:auto; }
+@media (max-width:1180px){ #atelierModal .atEditor{ position:static; max-height:none; } }
+#atelierModal .atDrop{ border:1.5px dashed var(--line); border-radius:10px; padding:12px; display:grid; gap:8px; text-align:center; background:var(--bg); }
+#atelierModal .atDrop.dragOver{ border-color:var(--pb); background:rgba(255,147,79,.1); }
+#atelierModal .atDrop .atChips{ justify-content:center; margin:0; }
+#atelierModal .atDrop .atLink{ text-align:left; grid-template-columns:minmax(0,1fr) 90px; }
+#atelierModal .atAttached{ display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:8px; padding:6px 10px; background:var(--bg); margin-top:6px; min-width:0; overflow-wrap:anywhere; }
+#atelierModal .atThumb{ width:38px; height:38px; object-fit:cover; border-radius:6px; }
+#atelierModal .atOpts{ display:grid; gap:6px; margin-bottom:6px; }
+#atelierModal .atOpt{ display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; align-items:center; }
+#atelierModal .atOpt input[type=radio]{ accent-color:var(--teal); width:18px; height:18px; }
+#atelierModal .atOpt.atOk .form-control{ border-color:var(--teal); background:var(--teal-soft); }
+#atelierModal .atPvHead{ margin-top:16px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+#atelierModal .atSeg{ display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+#atelierModal .atSeg button{ border:0; background:none; color:var(--fg); padding:4px 10px; font-size:12px; font-weight:600; }
+#atelierModal .atSeg button[aria-pressed="true"]{ background:var(--fg); color:var(--bg); }
+#atelierModal .atPreview{ margin:8px 0 0; border-radius:10px; background:#0F0A07; color:#F1E4C8; padding:14px; display:grid; gap:8px; min-height:130px; align-content:center; text-align:center; border:1px solid var(--line); }
+#atelierModal .atPreview.atPhone{ max-width:220px; margin-inline:auto; border-radius:18px; }
+#atelierModal .atPvQ{ font-family:var(--f-display); font-size:28px; line-height:1.05; overflow-wrap:anywhere; }
+#atelierModal .atPvSmall{ font-size:13px; overflow-wrap:anywhere; }
+#atelierModal .atPvLock{ font-size:11px; opacity:.65; }
+#atelierModal .atPvOpt{ background:rgba(255,255,255,.1); border-radius:6px; padding:5px 8px; font-size:12px; text-align:left; overflow-wrap:anywhere; }
+#atelierModal .atPvOpt.atOk{ outline:2px solid var(--teal); }
+#atelierModal .atPvAns{ background:var(--teal-soft); }
+#atelierModal .atPvBuzz{ background:var(--pb); color:#1B1410; font-weight:800; border-radius:99px; padding:10px; }
+#atelierModal .atFoot{ display:flex; gap:8px; justify-content:space-between; padding:12px 14px; border-top:1px solid var(--line); flex-wrap:wrap; }
+
+#atelierModal .atSecTitle{ padding:14px 14px 0; }
+#atelierModal .atOrder{ list-style:none; margin:0; padding:12px 14px; display:grid; gap:0; }
+#atelierModal .atStep{ display:grid; grid-template-columns:34px 20px minmax(0,1fr) auto auto; gap:10px; align-items:center; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+#atelierModal .atStepNo{ font-family:var(--f-display); font-size:30px; line-height:1; color:var(--pb); text-align:center; }
+#atelierModal .atStepName{ font-weight:700; overflow-wrap:anywhere; }
+#atelierModal .atStepMeta{ font-size:12px; color:var(--muted); }
+#atelierModal .atStepPts{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+#atelierModal .atStepPts input{ width:68px; }
+#atelierModal .atActs{ display:flex; gap:2px; }
+@media (max-width:760px){ #atelierModal .atStep{ grid-template-columns:30px minmax(0,1fr) auto; } #atelierModal .atStep .atGrip, #atelierModal .atStepPts{ display:none; } }
+#atelierModal .atVoteLink{ display:flex; align-items:center; margin:0 0 0 17px; padding:6px 0 6px 20px; border-left:2px dashed var(--teal); color:var(--good); font-size:12px; font-weight:600; }
+#atelierModal .atVoteLink.atOff{ border-left-color:var(--line); color:var(--muted); }
+#atelierModal .atSum{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:14px; }
+#atelierModal .atSum div{ text-align:center; }
+#atelierModal .atSum b{ display:block; font-family:var(--f-display); font-size:36px; line-height:1; font-variant-numeric:tabular-nums; }
+#atelierModal .atSum span{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+#atelierModal .atCheckList{ display:grid; gap:6px; padding:0 14px 14px; margin:0; list-style:none; font-size:13px; }
+#atelierModal .atCheckList li{ display:flex; gap:8px; }
+#atelierModal .atCk{ font-weight:800; flex:none; width:16px; text-align:center; }
+#atelierModal .atCk.g{ color:var(--good); } #atelierModal .atCk.w{ color:var(--bad); }
+#atelierModal .atDetails{ border-top:1px solid var(--line); }
+#atelierModal .atDetails summary{ padding:12px 14px; cursor:pointer; font-weight:700; list-style:none; display:flex; justify-content:space-between; }
+#atelierModal .atDetails summary::after{ content:"▾"; color:var(--muted); }
+#atelierModal .atDetails[open] summary::after{ content:"▴"; }
+#atelierModal .atDBody{ padding:0 14px 14px; display:grid; gap:8px; }
+#atelierModal .atSwitch{ display:flex; gap:10px; align-items:flex-start; font-size:13px; }
+#atelierModal .atSwitch input{ margin-top:3px; flex:none; }
+/* La confirmation (suppression...) doit rester au-dessus de l'atelier plein ecran. */
+#confirmActionModal{ z-index: 1065; }
+#atelierModal .atSide .atTwo{ grid-template-columns:minmax(0,1fr) 110px; }

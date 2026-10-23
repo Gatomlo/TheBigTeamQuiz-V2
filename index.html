@@ -498,200 +498,226 @@
         </div>
       </div>
     </div>
-    <!-- Modal Gerer les epreuves -->
-    <div class="modal fade" id="manageEpreuvesModal" tabindex="-1" role="dialog" aria-hidden="true">
-      <div class="modal-dialog modal-xl" role="document">
-        <div class="modal-content">
-          <div class="modal-body">
-            <h5 class="modal-title">Gérer les épreuves</h5>
-            <br>
-            <div class="row">
-              <div class="col-4">
-                <button id="newEpreuveButton" type="button" class="btn btn-success btn-sm w-100 mb-2">+ Nouvelle épreuve</button>
-                <button id="togglePlaylistImportButton" type="button" class="btn btn-outline-success btn-sm w-100 mb-2">🎵 Importer une playlist</button>
-                <div id="playlistImportBlock" class="border rounded p-2 mb-2" hidden>
-                  <input type="url" class="form-control form-control-sm mb-1" id="playlistUrlInput" placeholder="Lien de playlist YouTube ou Spotify">
-                  <input type="text" class="form-control form-control-sm mb-1" id="playlistNameInput" placeholder="Nom de l'épreuve (optionnel)">
-                  <div class="row g-1 mb-1">
-                    <div class="col-6">
+    <!-- Atelier : epreuves, questions et scenarios (remplace les anciennes modales de gestion) -->
+    <div class="modal fade" id="atelierModal" tabindex="-1" role="dialog" aria-labelledby="atelierTitle" aria-hidden="true">
+      <div class="modal-dialog modal-fullscreen" role="document">
+        <div class="modal-content atelier">
+          <div class="atTop">
+            <span class="atBrand" id="atelierTitle">Atelier</span>
+            <div class="atTabs" role="tablist" aria-label="Sections">
+              <button type="button" class="atTab" role="tab" id="atelierTabEp" data-tab="ep" aria-selected="true">Épreuves &amp; questions</button>
+              <button type="button" class="atTab" role="tab" id="atelierTabSc" data-tab="sc" aria-selected="false">Scénarios</button>
+            </div>
+            <span class="atSave" id="atelierSaveStatus" aria-live="polite">Enregistré</span>
+            <button type="button" class="atClose" data-bs-dismiss="modal">Fermer</button>
+          </div>
+
+          <div class="atBody">
+            <!-- ===== Epreuves ===== -->
+            <section id="atelierEp" class="atCols atEp">
+              <aside class="atPanel">
+                <header><h2>Épreuves</h2><button id="newEpreuveButton" type="button" class="atBtn atPri atSm">+ Nouvelle</button></header>
+                <div class="atPad">
+                  <input type="text" class="form-control form-control-sm" id="epreuveSearchInput" placeholder="Rechercher une épreuve…" aria-label="Rechercher une épreuve">
+                  <div class="atChips" id="atCatFilter">
+                    <button type="button" class="atChip" aria-pressed="true" data-c="all">Toutes</button>
+                    <button type="button" class="atChip" aria-pressed="false" data-c="cinema">Cinéma</button>
+                    <button type="button" class="atChip" aria-pressed="false" data-c="musique">Musique</button>
+                    <button type="button" class="atChip" aria-pressed="false" data-c="culture_g">Culture G</button>
+                    <button type="button" class="atChip" aria-pressed="false" data-c="culture_e">Culture E</button>
+                  </div>
+                </div>
+                <ul id="epreuvesList" class="atLib"></ul>
+                <div class="atPad atBorderTop atStack">
+                  <button id="togglePlaylistImportButton" type="button" class="atBtn">Importer une playlist YouTube / Spotify</button>
+                  <div id="playlistImportBlock" class="atImport" hidden>
+                    <input type="url" class="form-control form-control-sm" id="playlistUrlInput" placeholder="Lien de playlist YouTube ou Spotify">
+                    <input type="text" class="form-control form-control-sm" id="playlistNameInput" placeholder="Nom de l'épreuve (optionnel)">
+                    <div class="atTwo">
                       <select class="form-select form-select-sm" id="playlistTypeInput" title="Type de réponse">
                         <option value="buzzer">Buzzer</option>
                         <option value="qcm">QCM auto</option>
                         <option value="direct">Réponse directe</option>
                       </select>
-                    </div>
-                    <div class="col-6">
                       <select class="form-select form-select-sm" id="playlistStartInput" title="Début de lecture (YouTube)">
                         <option value="zero">Début du morceau</option>
                         <option value="random">Départ aléatoire</option>
                         <option value="30">À 30 s</option>
                       </select>
+                      <input type="number" min="1" class="form-control form-control-sm" id="playlistLimitInput" placeholder="Max titres" title="Nombre max de morceaux">
+                      <input type="number" min="5" class="form-control form-control-sm" id="playlistTimerInput" value="30" title="Durée par morceau (s)">
+                      <input type="number" min="1" class="form-control form-control-sm" id="playlistPointsInput" value="10" title="Points par morceau">
                     </div>
-                    <div class="col-4"><input type="number" min="1" class="form-control form-control-sm" id="playlistLimitInput" placeholder="Max titres" title="Nombre max de morceaux"></div>
-                    <div class="col-4"><input type="number" min="5" class="form-control form-control-sm" id="playlistTimerInput" value="30" title="Durée par morceau (s)"></div>
-                    <div class="col-4"><input type="number" min="1" class="form-control form-control-sm" id="playlistPointsInput" value="10" title="Points par morceau"></div>
+                    <label class="atCheck"><input type="checkbox" id="playlistShuffleInput" checked> Mélanger l'ordre</label>
+                    <button id="importPlaylistButton" type="button" class="atBtn atPri">Générer l'épreuve</button>
+                    <div class="atHelp">Une question par morceau ; la réponse (artiste — titre) est pour l'animateur uniquement.</div>
                   </div>
-                  <div class="form-check small"><input class="form-check-input" type="checkbox" id="playlistShuffleInput" checked><label class="form-check-label" for="playlistShuffleInput">Mélanger l'ordre</label></div>
-                  <button id="importPlaylistButton" type="button" class="btn btn-success btn-sm w-100 mt-1">Générer l'épreuve</button>
-                  <div class="text-muted small mt-1">Une question par morceau ; la réponse (artiste — titre) est pour l'animateur uniquement.</div>
+                  <button id="duplicateEpreuveButton" type="button" class="atBtn">Dupliquer l'épreuve sélectionnée</button>
                 </div>
-                <input type="text" class="form-control form-control-sm" id="epreuveSearchInput" placeholder="🔎 Rechercher une épreuve...">
-                <div id="epreuvesList" class="epreuvesList"></div>
-              </div>
-              <div class="col-8">
-                <div id="epreuveForm" hidden>
-                  <div class="row g-2">
-                    <div class="col-6">
-                      <label class="form-label">Nom</label>
-                      <input type="text" class="form-control form-control-sm" id="epreuveNameInput">
-                    </div>
-                    <div class="col-3">
-                      <label class="form-label">Type de réponse</label>
+              </aside>
+
+              <div class="atPanel" id="atEpMain" hidden>
+                <header>
+                  <div class="atGrow">
+                    <h2 id="atEpTitle"></h2>
+                    <div id="atEpTags" class="atChips"></div>
+                  </div>
+                  <button id="atToggleSettings" type="button" class="atBtn atSm" aria-expanded="false">Réglages de l'épreuve</button>
+                </header>
+                <div id="epreuveForm" class="atSettings" hidden>
+                  <div class="atTwo">
+                    <div><label class="atLbl" for="epreuveNameInput">Nom</label><input type="text" class="form-control form-control-sm" id="epreuveNameInput"></div>
+                    <div><label class="atLbl" for="epreuveResponseTypeInput">Réponse des équipes</label>
                       <select class="form-select form-select-sm" id="epreuveResponseTypeInput">
                         <option value="buzzer">Buzzer</option>
                         <option value="qcm">QCM</option>
                         <option value="direct">Réponse directe</option>
-                      </select>
-                    </div>
-                    <div class="col-3">
-                      <label class="form-label">Points par défaut</label>
-                      <input type="number" class="form-control form-control-sm" id="epreuveDefaultPointsInput" value="10">
-                    </div>
-                    <div class="col-6">
-                      <label class="form-label d-block">Catégorie</label>
-                      <div class="btn-group" role="group" style="flex-wrap: wrap; row-gap: 4px;">
-                        <input type="radio" class="btn-check" name="epreuveCategoryRadio" id="epreuveCategoryCinema" value="cinema" autocomplete="off" checked>
-                        <label class="btn btn-outline-secondary btn-sm" for="epreuveCategoryCinema">🎬 Cinéma</label>
-                        <input type="radio" class="btn-check" name="epreuveCategoryRadio" id="epreuveCategoryMusique" value="musique" autocomplete="off">
-                        <label class="btn btn-outline-secondary btn-sm" for="epreuveCategoryMusique">🎵 Musique</label>
-                        <input type="radio" class="btn-check" name="epreuveCategoryRadio" id="epreuveCategoryCultureG" value="culture_g" autocomplete="off">
-                        <label class="btn btn-outline-secondary btn-sm" for="epreuveCategoryCultureG">🧠 Culture G</label>
-                        <input type="radio" class="btn-check" name="epreuveCategoryRadio" id="epreuveCategoryCultureE" value="culture_e" autocomplete="off">
-                        <label class="btn btn-outline-secondary btn-sm" for="epreuveCategoryCultureE">🌍 Culture E</label>
-                      </div>
-                    </div>
-                    <div class="col-12 form-check mt-1">
-                      <input type="checkbox" class="form-check-input" id="epreuveTimerEnabledInput">
-                      <label class="form-check-label" for="epreuveTimerEnabledInput">Limiter le temps pour buzzer</label>
-                    </div>
-                    <div class="col-4" id="epreuveTimerSecondsBlock" hidden>
-                      <label class="form-label">Durée (secondes)</label>
-                      <input type="number" min="1" class="form-control form-control-sm" id="epreuveTimerSecondsInput" value="30">
-                    </div>
-                    <div class="col-12">
-                      <label class="form-label">Consigne <span class="text-muted">(jamais visible des joueurs ni du display)</span></label>
-                      <textarea class="form-control form-control-sm" id="epreuveHostNoteInput" rows="2"></textarea>
-                    </div>
+                      </select></div>
+                    <div><label class="atLbl" for="epreuveCategoryInput">Catégorie</label>
+                      <select class="form-select form-select-sm" id="epreuveCategoryInput">
+                        <option value="cinema">🎬 Cinéma</option>
+                        <option value="musique">🎵 Musique</option>
+                        <option value="culture_g">🧠 Culture G</option>
+                        <option value="culture_e">🌍 Culture E</option>
+                      </select></div>
+                    <div><label class="atLbl" for="epreuveDefaultPointsInput">Points par question</label><input type="number" class="form-control form-control-sm" id="epreuveDefaultPointsInput" value="10"></div>
+                    <div><label class="atLbl" for="epreuveTimerSecondsInput">Temps limité <small>(secondes, 0 = illimité)</small></label><input type="number" min="0" class="form-control form-control-sm" id="epreuveTimerSecondsInput" value="0"></div>
                   </div>
-                  <button id="saveEpreuveButton" type="button" class="btn btn-primary btn-sm mt-2">Enregistrer l'épreuve</button>
-                  <button id="deleteEpreuveButton" type="button" class="btn btn-outline-danger btn-sm mt-2">Supprimer l'épreuve</button>
-                  <hr>
-                  <h6>Questions</h6>
-                  <div id="questionsList" class="questionsList"></div>
-                  <div id="questionForm" class="questionForm">
-                    <h6 id="questionFormTitle">Nouvelle question</h6>
-                    <label class="form-label">Texte</label>
-                    <textarea class="form-control form-control-sm" id="questionTextInput" rows="2"></textarea>
-                    <div id="qcmOptionsBlock" hidden>
-                      <label class="form-label mt-1">Options QCM (une par ligne)</label>
-                      <textarea class="form-control form-control-sm" id="qcmOptionsInput" rows="3"></textarea>
-                      <label class="form-label mt-1">Index de la bonne réponse (0 = première ligne)</label>
-                      <input type="number" min="0" class="form-control form-control-sm" id="qcmCorrectIndexInput">
-                    </div>
-                    <label class="form-label mt-1">Image(s) <span class="text-muted">(laisser vide pour garder les images actuelles)</span></label>
-                    <input type="file" class="form-control form-control-sm" id="questionImagesInput" accept="image/*" multiple>
-                    <div id="questionImagesPreview" class="questionImagesPreview text-muted small"></div>
-                    <label class="form-label mt-1">Audio <span class="text-muted">(laisser vide pour garder l'audio actuel)</span></label>
-                    <input type="file" class="form-control form-control-sm" id="questionAudioInput" accept="audio/*">
-                    <div id="questionAudioCurrent" class="text-muted small"></div>
-                    <label class="form-label mt-1">Vidéo <span class="text-muted">(laisser vide pour garder la vidéo actuelle)</span></label>
-                    <input type="file" class="form-control form-control-sm" id="questionVideoInput" accept="video/*">
-                    <div id="questionVideoCurrent" class="text-muted small"></div>
-                    <label class="form-label mt-1">Lien YouTube / Spotify <span class="text-muted">(morceau joué par le lecteur intégré, sans afficher la vidéo)</span></label>
-                    <div class="row g-2">
-                      <div class="col-9"><input type="url" class="form-control form-control-sm" id="questionMediaUrlInput" placeholder="https://www.youtube.com/watch?v=… ou https://open.spotify.com/track/…"></div>
-                      <div class="col-3"><input type="number" min="0" class="form-control form-control-sm" id="questionMediaStartInput" placeholder="Début (s)" title="Début de lecture en secondes (YouTube)"></div>
-                    </div>
-                    <label class="form-label mt-1">Réponse <span class="text-muted">(jamais visible des joueurs ni du display)</span></label>
-                    <textarea class="form-control form-control-sm" id="questionHostNoteInput" rows="2"></textarea>
-                    <label class="form-label mt-1">Indice / anecdote <span class="text-muted">(optionnel, jamais visible des joueurs ni du display)</span></label>
-                    <textarea class="form-control form-control-sm" id="questionHintInput" rows="2"></textarea>
-                    <button id="saveQuestionButton" type="button" class="btn btn-primary btn-sm mt-2">Ajouter la question</button>
-                    <button id="cancelEditQuestionButton" type="button" class="btn btn-outline-secondary btn-sm mt-2" hidden>Annuler la modification</button>
+                  <label class="atLbl" for="epreuveHostNoteInput">Consigne pour l'animateur <small>(jamais visible des joueurs ni du display)</small></label>
+                  <textarea class="form-control form-control-sm" id="epreuveHostNoteInput" rows="2"></textarea>
+                  <div class="atRowEnd"><button id="deleteEpreuveButton" type="button" class="atBtn atDel atSm">Supprimer l'épreuve</button></div>
+                </div>
+
+                <div id="questionsList" role="list"></div>
+
+                <div class="atQuick">
+                  <h3>Ajout rapide</h3>
+                  <div class="atRow">
+                    <input type="text" class="form-control form-control-sm" id="atQuickInput" placeholder="Question | Réponse   (Entrée pour ajouter)" aria-label="Ajout rapide">
+                    <button type="button" class="atBtn atPri" id="atQuickButton">Ajouter</button>
                   </div>
+                  <p class="atHelp">Astuce : collez plusieurs lignes d'un coup (une question par ligne), ou glissez des images sur la liste pour créer une question par image.</p>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <!-- Modal Gerer les scenarios -->
-    <div class="modal fade" id="manageScenariosModal" tabindex="-1" role="dialog" aria-hidden="true">
-      <div class="modal-dialog modal-xl" role="document">
-        <div class="modal-content">
-          <div class="modal-body">
-            <h5 class="modal-title">Gérer les scénarios</h5>
-            <br>
-            <div class="row">
-              <div class="col-4">
-                <button id="newScenarioButton" type="button" class="btn btn-success btn-sm w-100 mb-2">+ Nouveau scénario</button>
-                <div id="scenariosList" class="epreuvesList"></div>
-              </div>
-              <div class="col-8">
-                <div id="scenarioForm" hidden>
-                  <label class="form-label">Nom du scénario</label>
-                  <input type="text" class="form-control form-control-sm" id="scenarioNameInput">
-                  <div class="form-check mt-2">
-                    <input class="form-check-input" type="checkbox" id="scenarioShowMenuOnDisplayInput" checked>
-                    <label class="form-check-label" for="scenarioShowMenuOnDisplayInput">Afficher le menu des épreuves sur le display <span class="text-muted">(sinon réservé au gestionnaire)</span></label>
+
+              <aside class="atPanel atEditor" id="atEditor" aria-label="Éditeur de question" hidden>
+                <header><h2 id="atEdTitle">Question</h2><span class="atTag" id="atEdState">Enregistré</span></header>
+                <div class="atPad">
+                  <label class="atLbl atFirst" for="questionTextInput">Question <small>(affichée aux équipes)</small></label>
+                  <textarea class="form-control form-control-sm" id="questionTextInput" rows="2"></textarea>
+
+                  <label class="atLbl" for="questionHostNoteInput">Réponse <small>(animateur uniquement)</small></label>
+                  <input type="text" class="form-control form-control-sm" id="questionHostNoteInput">
+
+                  <div id="qcmOptionsBlock" hidden>
+                    <label class="atLbl">Choix proposés <small>(cochez la bonne réponse)</small></label>
+                    <div id="atQcmOptions" class="atOpts"></div>
+                    <button type="button" class="atBtn atSm" id="atAddOption">+ Ajouter un choix</button>
                   </div>
-                  <fieldset class="scenarioVoteBox mt-3">
-                    <legend>Vote de l'épreuve suivante</legend>
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" id="scenarioVoteAutoInput">
-                      <label class="form-check-label" for="scenarioVoteAutoInput">Proposer le vote automatiquement après chaque épreuve <span class="text-muted">(sinon, l'animateur le lance à la demande)</span></label>
+
+                  <label class="atLbl">Média</label>
+                  <div class="atDrop" id="atDrop">
+                    <div><b>Glissez un fichier ici</b> ou <button type="button" class="atBtn atSm" id="atBrowse">Parcourir</button></div>
+                    <div class="atChips"><span class="atTag">Image</span><span class="atTag">Audio</span><span class="atTag">Vidéo</span></div>
+                    <input type="file" id="atFileInput" accept="image/*,audio/*,video/*" multiple hidden>
+                    <div class="atTwo atLink">
+                      <input type="url" class="form-control form-control-sm" id="questionMediaUrlInput" placeholder="…ou collez un lien YouTube / Spotify" aria-label="Lien YouTube ou Spotify">
+                      <input type="number" min="0" class="form-control form-control-sm" id="questionMediaStartInput" placeholder="Début (s)" title="Début de lecture en secondes (YouTube)">
                     </div>
-                    <div class="row g-2 mt-1">
-                      <div class="col-6">
-                        <label class="form-label small mb-0" for="scenarioVoteCountInput">Épreuves proposées</label>
+                  </div>
+                  <div id="atAttached"></div>
+
+                  <label class="atLbl" for="questionHintInput">Indice / anecdote <small>(optionnel, animateur uniquement)</small></label>
+                  <textarea class="form-control form-control-sm" id="questionHintInput" rows="2"></textarea>
+
+                  <div class="atPvHead">
+                    <h3>Aperçu</h3>
+                    <div class="atSeg" id="atPvSeg" role="group" aria-label="Aperçu pour">
+                      <button type="button" aria-pressed="true" data-v="display">Écran</button>
+                      <button type="button" aria-pressed="false" data-v="phone">Téléphone</button>
+                      <button type="button" aria-pressed="false" data-v="host">Animateur</button>
+                    </div>
+                  </div>
+                  <figure class="atPreview" id="atPreview"></figure>
+                </div>
+                <div class="atFoot">
+                  <button type="button" class="atBtn atDel atSm" id="atDeleteQuestion">Supprimer</button>
+                  <button type="button" class="atBtn atSm" id="atDuplicateQuestion">Dupliquer</button>
+                </div>
+              </aside>
+
+              <div class="atPanel atEmpty" id="atEpEmpty">Sélectionnez une épreuve à gauche, ou créez-en une nouvelle.</div>
+            </section>
+
+            <!-- ===== Scenarios ===== -->
+            <section id="atelierSc" class="atCols atSc" hidden>
+              <aside class="atPanel">
+                <header><h2>Épreuves</h2><span class="atHelp">cliquer pour ajouter</span></header>
+                <div class="atPad"><input type="text" class="form-control form-control-sm" id="atScSearch" placeholder="Rechercher…" aria-label="Rechercher une épreuve"></div>
+                <ul id="atScLib" class="atLib"></ul>
+              </aside>
+
+              <div class="atPanel" id="atScMain">
+                <header>
+                  <div class="atGrow">
+                    <label class="atMini" for="atScSelect">Scénario</label>
+                    <select id="atScSelect" class="form-select form-select-sm" aria-label="Choisir un scénario"></select>
+                  </div>
+                  <div class="atRow">
+                    <button id="newScenarioButton" type="button" class="atBtn atSm">+ Nouveau</button>
+                    <button id="atScDuplicate" type="button" class="atBtn atSm">Dupliquer</button>
+                    <button id="atScLaunch" type="button" class="atBtn atPri atSm">Lancer</button>
+                  </div>
+                </header>
+                <div id="atScBody">
+                <div class="atPad atBorderBottom">
+                  <label class="atLbl atFirst" for="scenarioNameInput">Nom du scénario</label>
+                  <input type="text" class="form-control form-control-sm" id="scenarioNameInput">
+                </div>
+                <h3 class="atSecTitle">Déroulé</h3>
+                <ol id="atScOrder" class="atOrder"></ol>
+                <div class="atEmptyBox" id="atScEmpty" hidden>Aucune épreuve pour l'instant. Cliquez sur une épreuve de la colonne de gauche pour l'ajouter.</div>
+                </div>
+                <div class="atEmptyBox" id="atScEmptyAll" hidden>Aucun scénario. Créez-en un avec « + Nouveau ».</div>
+              </div>
+
+              <aside class="atPanel atSide" id="atScSide" hidden>
+                <header><h2>Bilan</h2></header>
+                <div class="atSum">
+                  <div><b id="atSumDur">0</b><span>minutes</span></div>
+                  <div><b id="atSumQ">0</b><span>questions</span></div>
+                  <div><b id="atSumPts">0</b><span>pts max</span></div>
+                </div>
+                <ul class="atCheckList" id="atScCheck"></ul>
+
+                <details class="atDetails" open>
+                  <summary>Vote entre les épreuves</summary>
+                  <div class="atDBody">
+                    <label class="atSwitch"><input class="form-check-input" type="checkbox" id="scenarioVoteAutoInput"> <span>Proposer le vote automatiquement après chaque épreuve <small>(sinon, l'animateur le lance à la demande)</small></span></label>
+                    <div class="atTwo">
+                      <div><label class="atLbl" for="scenarioVoteCountInput">Épreuves proposées</label>
                         <select id="scenarioVoteCountInput" class="form-select form-select-sm">
                           <option value="0">Toutes les restantes</option>
                           <option value="2">2 tirées au hasard</option>
                           <option value="3">3 tirées au hasard</option>
                           <option value="4">4 tirées au hasard</option>
-                        </select>
-                      </div>
-                      <div class="col-6">
-                        <label class="form-label small mb-0" for="scenarioVoteDurationInput">Durée (secondes, 0 = clôture manuelle)</label>
-                        <input type="number" min="0" max="600" class="form-control form-control-sm" id="scenarioVoteDurationInput" value="30">
-                      </div>
+                        </select></div>
+                      <div><label class="atLbl" for="scenarioVoteDurationInput">Durée <small>(s, 0 = manuelle)</small></label>
+                        <input type="number" min="0" max="600" class="form-control form-control-sm" id="scenarioVoteDurationInput" value="30"></div>
                     </div>
-                    <div class="form-check mt-2">
-                      <input class="form-check-input" type="checkbox" id="scenarioVoteLiveInput">
-                      <label class="form-check-label" for="scenarioVoteLiveInput">Montrer les votes en direct <span class="text-muted">(sinon secrets jusqu'au résultat)</span></label>
-                    </div>
-                    <div class="form-check mt-1">
-                      <input class="form-check-input" type="checkbox" id="scenarioVoteAutoLaunchInput">
-                      <label class="form-check-label" for="scenarioVoteAutoLaunchInput">Lancer automatiquement l'épreuve gagnante <span class="text-muted">(sinon l'animateur clique « Lancer »)</span></label>
-                    </div>
-                  </fieldset>
-                  <button id="saveScenarioButton" type="button" class="btn btn-primary btn-sm mt-2">Enregistrer le scénario</button>
-                  <button id="deleteScenarioButton" type="button" class="btn btn-outline-danger btn-sm mt-2">Supprimer le scénario</button>
-                  <hr>
-                  <div class="row">
-                    <div class="col-6">
-                      <h6>Épreuves disponibles</h6>
-                      <div id="availableEpreuvesList" class="questionsList"></div>
-                    </div>
-                    <div class="col-6">
-                      <h6>Épreuves du scénario (ordre)</h6>
-                      <div id="chosenEpreuvesList" class="questionsList"></div>
-                    </div>
+                    <label class="atSwitch"><input class="form-check-input" type="checkbox" id="scenarioVoteLiveInput"> <span>Montrer les votes en direct <small>(sinon secrets jusqu'au résultat)</small></span></label>
+                    <label class="atSwitch"><input class="form-check-input" type="checkbox" id="scenarioVoteAutoLaunchInput"> <span>Lancer automatiquement l'épreuve gagnante <small>(sinon l'animateur clique « Lancer »)</small></span></label>
                   </div>
-                </div>
-              </div>
-            </div>
+                </details>
+                <details class="atDetails">
+                  <summary>Affichage</summary>
+                  <div class="atDBody">
+                    <label class="atSwitch"><input class="form-check-input" type="checkbox" id="scenarioShowMenuOnDisplayInput" checked> <span>Afficher le menu des épreuves sur le display <small>(sinon réservé au gestionnaire)</small></span></label>
+                  </div>
+                </details>
+                <div class="atFoot"><button id="deleteScenarioButton" type="button" class="atBtn atDel atSm">Supprimer le scénario</button></div>
+              </aside>
+            </section>
           </div>
         </div>
       </div>
