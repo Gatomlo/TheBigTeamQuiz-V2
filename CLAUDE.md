@@ -34,3 +34,5 @@ Outil de quiz en direct pour team building (Team Building du Phoenix) : l'animat
 - Réponses en français, concises. Tester par API/ligne de commande avant les captures d'écran.
 - Pas d'accents dans `curl -d` inline (utiliser `--data-binary @fichier`).
 - Le dépôt git a un index corrompu (« unknown index entry format ») : ne pas committer sans réparer.
+
+- Connexion centralisée (node-gateway) : `server/gateway-bridge.js` + `GET /api/auth/gateway` (`server/server.js`) + porte de l'écran gestionnaire dans `index.html` : un animateur connecté à la passerelle avec le droit **admin** passe la porte sans mot de passe. **Attention :** la porte ne masque que l'interface, le serveur ne protège ni les routes HTTP de gestion ni les événements Socket.IO de pilotage (voir `server/README.md`, section Sécurité). Test : `server/test/gateway-bridge.test.js`.

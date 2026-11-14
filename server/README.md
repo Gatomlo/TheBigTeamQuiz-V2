@@ -108,3 +108,15 @@ script n'a pas besoin d'etre relance ; il est conserve pour reference/tracabilit
   `prev-question`, `submit-answer`, `validate-answer`, `show-qr`/`hide-qr`,
   `show-scoreboard`/`hide-scoreboard`, `register-role` — tous diffuses via
   l'evenement `state`.
+
+## Connexion centralisée (node-gateway) et sécurité de l'écran gestionnaire
+
+**Pont.** Monté derrière node-gateway, `GET /api/auth/gateway` répond `200` si la passerelle fournit `req.gateway` avec le droit `admin` sur cet outil (`204` sinon, et toujours `204` hors passerelle). `index.html` l'appelle au chargement de l'écran gestionnaire : un animateur connecté à la passerelle passe la porte sans mot de passe (sauf après une déconnexion volontaire de l'onglet). Fichier `server/gateway-bridge.js` = copie de `node-gateway/docs/gateway-bridge.js`. Test : `server/test/gateway-bridge.test.js` (`npm test` dans `server/`). `QUIZ_DATA_DIR` (facultatif) déplace `data/` pour les essais.
+
+**Limite importante (déjà vraie avant le pont).** La « porte » du gestionnaire, avec le mot de passe comme avec la passerelle, **ne masque que l'interface** (valeur `managerAuthenticatedUntil` dans le `localStorage`). Le serveur ne vérifie rien :
+- les routes HTTP de gestion (`POST/PUT/DELETE /api/epreuves`, `/api/questions`, `/api/scenarios`, `/api/upload`, `/api/import-playlist`, `DELETE /api/games/:id`) sont ouvertes ;
+- les événements Socket.IO de pilotage (`launch-scenario`, `close-game`, `resolve-correct`, `set-config`…) ne sont pas authentifiés, et Socket.IO accepte toute origine (`cors: { origin: '*' }`).
+
+Toute personne qui connaît l'adresse du serveur peut donc modifier les épreuves ou perturber une partie en cours. À traiter : exiger côté serveur le droit `admin` de la passerelle (HTTP et handshake Socket.IO) pour ces routes et événements.
+
+**À vérifier au déploiement :** sans variable `MANAGER_PASSWORD`, le mot de passe est `quiz2024` (public dans ce dépôt) tant qu'il n'a pas été changé depuis l'interface.

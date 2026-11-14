@@ -3049,6 +3049,7 @@ if(APP_MODE === 'control'){
 
 $( "#managerLogoutButton" ).on( "click", function(){
   localStorage.removeItem('managerAuthenticatedUntil');
+  try { sessionStorage.setItem('managerNoGateway', '1'); } catch(e){} // ne pas se reconnecter aussitot via la passerelle
   location.reload();
 });
 

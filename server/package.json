@@ -4,7 +4,8 @@
   "description": "Serveur temps reel pour le buzzer de The Big Team Quiz",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=22.5.0"

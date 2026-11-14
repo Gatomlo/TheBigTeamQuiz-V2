@@ -5,6 +5,7 @@ const express = require('express');
 const http = require('http');
 const multer = require('multer');
 const playlist = require('./playlist');
+const gatewayBridge = require('./gateway-bridge');
 const { Server } = require('socket.io');
 const { DatabaseSync } = require('node:sqlite'); // module natif Node (>= 22.5), zero dependance npm
 
@@ -52,7 +53,7 @@ app.use('/gestion', (req, res, next) => {
 }, express.static(FRONT_ROOT, { index: 'index.html', dotfiles: 'ignore' }));
 
 // ---- Base de donnees (historique des parties + epreuves/scenarios) ----
-const dataDir = path.join(__dirname, 'data');
+const dataDir = process.env.QUIZ_DATA_DIR || path.join(__dirname, 'data'); // surcharge : essais automatiques
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 const db = new DatabaseSync(path.join(dataDir, 'quiz.db'));
 db.exec('PRAGMA journal_mode = WAL');
@@ -516,6 +517,16 @@ function recordFailedLoginAttempt(ip) {
   }
   loginAttemptsByIp.set(ip, entry);
 }
+
+// Connexion centralisee de node-gateway : la passerelle pose req.gateway (cote serveur, dans le meme process) quand
+// l'utilisateur y est connecte. Avec le droit « admin » sur cet outil (les animateurs), l'ecran gestionnaire passe
+// la porte du mot de passe (204 sinon). Hors passerelle : toujours 204.
+// ATTENTION : comme le mot de passe actuel, cette porte ne masque que l'interface ; elle ne protege pas les
+// routes /api ni les evenements Socket.IO de pilotage (voir README, section Securite).
+app.get('/api/auth/gateway', (req, res) => {
+  if (!gatewayBridge.identity(req, 'admin')) return res.status(204).end();
+  res.json({ ok: true });
+});
 
 app.post('/api/login', (req, res) => {
   if (isLoginLocked(req.ip)) {

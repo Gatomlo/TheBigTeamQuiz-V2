@@ -45,6 +45,18 @@
       var authUntil = parseInt(localStorage.getItem('managerAuthenticatedUntil'), 10);
       if(window.APP_MODE === 'control' && !(authUntil && Date.now() < authUntil)){
         document.getElementById('managerLoginGate').hidden = false;
+        // Connexion centralisee de node-gateway : si la passerelle se porte garante de l'animateur (droit admin),
+        // la porte s'ouvre sans mot de passe. Sans effet hors passerelle (204). Pas tente apres une deconnexion
+        // volontaire (cet onglet).
+        try {
+          if(sessionStorage.getItem('managerNoGateway') !== '1'){
+            fetch(window.BUZZ_SERVER_URL + '/api/auth/gateway', { credentials: 'same-origin' }).then(function(r){
+              if(r.status !== 200) return;
+              localStorage.setItem('managerAuthenticatedUntil', String(Date.now() + 12 * 60 * 60 * 1000));
+              document.getElementById('managerLoginGate').hidden = true;
+            }).catch(function(){});
+          }
+        } catch(e){}
       }
     </script>
     <div id="rehearsalBanner" class="rehearsalBanner" hidden>🎬 MODE RÉPÉTITION — cette partie ne sera pas enregistrée dans l'historique</div>
