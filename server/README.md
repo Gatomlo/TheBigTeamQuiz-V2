@@ -113,10 +113,11 @@ script n'a pas besoin d'etre relance ; il est conserve pour reference/tracabilit
 
 **Pont.** Monté derrière node-gateway, `GET /api/auth/gateway` répond `200` si la passerelle fournit `req.gateway` avec le droit `admin` sur cet outil (`204` sinon, et toujours `204` hors passerelle). `index.html` l'appelle au chargement de l'écran gestionnaire : un animateur connecté à la passerelle passe la porte sans mot de passe (sauf après une déconnexion volontaire de l'onglet). Fichier `server/gateway-bridge.js` = copie de `node-gateway/docs/gateway-bridge.js`. Test : `server/test/gateway-bridge.test.js` (`npm test` dans `server/`). `QUIZ_DATA_DIR` (facultatif) déplace `data/` pour les essais.
 
-**Limite importante (déjà vraie avant le pont).** La « porte » du gestionnaire, avec le mot de passe comme avec la passerelle, **ne masque que l'interface** (valeur `managerAuthenticatedUntil` dans le `localStorage`). Le serveur ne vérifie rien :
-- les routes HTTP de gestion (`POST/PUT/DELETE /api/epreuves`, `/api/questions`, `/api/scenarios`, `/api/upload`, `/api/import-playlist`, `DELETE /api/games/:id`) sont ouvertes ;
-- les événements Socket.IO de pilotage (`launch-scenario`, `close-game`, `resolve-correct`, `set-config`…) ne sont pas authentifiés, et Socket.IO accepte toute origine (`cors: { origin: '*' }`).
+**Sécurité (derrière la passerelle).** Dès que l'app est montée par node-gateway, la gestion est réservée au droit `admin` de la passerelle :
+- routes HTTP de gestion (`/api/epreuves`, `/api/questions`, `/api/scenarios`, `/api/upload`, `/api/import-playlist`, `/api/games`, `DELETE /api/games/:id`, `/api/change-password`) : `401` sinon. Restent publiques : `/api/leaderboard`, `/api/games/share/:token`, `/api/login`, `/api/auth/gateway` ;
+- événements Socket.IO : seuls `register-role`, `create-team`, `buzz`, `cast-vote`, `submit-answer` (joueurs et projecteur) sont publics ; tout le pilotage exige le droit `admin` (la passerelle fournit `identify(req)` via `attachToServer`) ; un refus émet `unauthorized` au client ;
+- aucun en-tête CORS (même origine) ;
+- uploads : images, audio et vidéo uniquement (`.html`, `.svg`, `.js`… refusés), fichiers servis en `nosniff` avec `Content-Security-Policy: sandbox` ;
+- mot de passe : plus de valeur par défaut (`quiz2024` était public). Sans `MANAGER_PASSWORD` ni mot de passe enregistré, un mot de passe aléatoire est généré **une fois** et affiché dans la console ; 8 caractères minimum.
 
-Toute personne qui connaît l'adresse du serveur peut donc modifier les épreuves ou perturber une partie en cours. À traiter : exiger côté serveur le droit `admin` de la passerelle (HTTP et handshake Socket.IO) pour ces routes et événements.
-
-**À vérifier au déploiement :** sans variable `MANAGER_PASSWORD`, le mot de passe est `quiz2024` (public dans ce dépôt) tant qu'il n'a pas été changé depuis l'interface.
+**En lancement autonome (`node server.js`)** le comportement historique est conservé pour ne pas casser un usage existant : routes et événements de gestion ouverts, CORS ouvert. **Ne pas exposer cette variante sur Internet** : la porte du gestionnaire ne masque que l'interface.

@@ -1495,6 +1495,10 @@ function loadBuzzClient(){
   // node-gateway) : sans ca, io() le prendrait pour un namespace. Origine + chemin explicite.
   var buzzUrl = new URL(BUZZ_SERVER_URL, location.href);
   buzzSocket = io(buzzUrl.origin, { path: buzzUrl.pathname.replace(/\/+$/, '') + '/socket.io' });
+  // Derriere la passerelle, le serveur refuse le pilotage si l'animateur n'y est pas connecte (droit admin).
+  buzzSocket.on('unauthorized', function(){
+    showToast('Action refusée : connectez-vous à la passerelle avec un compte animateur (droit admin).', 'error');
+  });
   buzzSocket.on('connect', function(){
     buzzSocket.emit('register-role', APP_MODE);
     // Seul l'ecran gestionnaire fait autorite sur la liste d'equipes :
@@ -3064,8 +3068,8 @@ $( "#changePasswordSubmitButton" ).on( "click", function(){
   var newPassword = $('#newPasswordInput').val();
   var confirmNewPassword = $('#confirmNewPasswordInput').val();
   var $error = $('#changePasswordError');
-  if(newPassword.length < 4){
-    $error.text('Le nouveau mot de passe doit faire au moins 4 caractères.').prop('hidden', false);
+  if(newPassword.length < 8){
+    $error.text('Le nouveau mot de passe doit faire au moins 8 caractères.').prop('hidden', false);
     return;
   }
   if(newPassword !== confirmNewPassword){

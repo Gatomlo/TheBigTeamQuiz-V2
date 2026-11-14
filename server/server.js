@@ -18,14 +18,35 @@ app.set('trust proxy', true);
 const server = http.createServer(app); // utilise seulement en lancement autonome (voir la fin du fichier)
 let io = null; // Socket.IO est cree par createIo() : sur ce serveur HTTP, ou celui de la passerelle
 
+// SECURITE (voir README, section Securite). Derriere node-gateway (req.gateway pose par la passerelle), le front et
+// l'API ont la meme origine : AUCUN en-tete CORS n'est envoye (un site tiers ne peut plus appeler cette API depuis
+// le navigateur d'un visiteur), et la gestion exige le droit « admin » de la passerelle. En lancement autonome
+// (node server.js), le comportement historique est conserve : CORS ouvert (le front peut etre servi ailleurs, ?buzz=).
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  if (!gatewayBridge.behindGateway(req)) {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+  }
   next();
 });
 app.use(express.json());
+
+// Routes HTTP de gestion : droit « admin » de la passerelle exige (derriere la passerelle uniquement).
+// Restent publiques : le classement, le partage d'une partie (lien secret), la connexion par mot de passe,
+// et la route de pont. Les joueurs (telephones) n'appellent que /api/games/share/:token.
+const PUBLIC_API = (req) => req.path === '/login' || req.path === '/auth/gateway'
+  || (req.method === 'GET' && (req.path === '/leaderboard' || /^\/games\/share\/[^/]+$/.test(req.path)));
+app.use('/api', (req, res, next) => {
+  if (!gatewayBridge.behindGateway(req) || PUBLIC_API(req) || gatewayBridge.identity(req, 'admin')) return next();
+  res.status(401).json({ error: 'Connexion requise : droit admin sur la passerelle.' });
+});
+// Fichiers envoyes : jamais interpretes (nosniff) ni executes meme si un contenu actif s'y glissait (sandbox).
+app.use('/uploads', (req, res, next) => {
+  res.set({ 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox" });
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Gestionnaire et ecran d'affichage (le front statique a la racine du depot) servis par le quiz lui-meme
@@ -440,14 +461,24 @@ app.delete('/api/scenarios/:id', (req, res) => {
 // ---- Upload de medias (questions) ----
 const uploadsDir = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+// Extensions media acceptees : jamais de .html / .svg / .js (un fichier servi en text/html sur l'origine de la
+// passerelle serait executable par le navigateur de n'importe quel visiteur).
+const UPLOAD_EXT = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac', '.mp4', '.webm', '.mov', '.m4v']);
 const upload = multer({
   storage: multer.diskStorage({
     destination: uploadsDir,
-    filename: (req, file, cb) => cb(null, crypto.randomUUID() + path.extname(file.originalname))
+    filename: (req, file, cb) => cb(null, crypto.randomUUID() + path.extname(file.originalname).toLowerCase())
   }),
+  fileFilter: (req, file, cb) => {
+    if (UPLOAD_EXT.has(path.extname(file.originalname).toLowerCase())) return cb(null, true);
+    cb(Object.assign(new Error('Type de fichier non autorise (images, audio et video uniquement).'), { status: 415 }));
+  },
   limits: { fileSize: 200 * 1024 * 1024 } // 200 Mo, large pour de la video
 });
-app.post('/api/upload', upload.single('file'), (req, res) => {
+app.post('/api/upload', (req, res, next) => upload.single('file')(req, res, (err) => {
+  if (err) return res.status(err.status || 400).json({ error: err.message });
+  next();
+}), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'no file' });
   res.json({ url: '/uploads/' + req.file.filename });
 });
@@ -463,7 +494,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 // MANAGER_PASSWORD au premier deploiement ; valeur par defaut uniquement pour
 // les tests locaux, a changer avant un vrai evenement (ou simplement changee
 // une fois depuis l'ecran gestionnaire une fois deployee).
-const MANAGER_PASSWORD = process.env.MANAGER_PASSWORD || 'quiz2024';
+const MANAGER_PASSWORD = process.env.MANAGER_PASSWORD || null; // plus de mot de passe par defaut (il etait public dans ce depot)
 const getSettingStmt = db.prepare('SELECT value FROM settings WHERE key = ?');
 const setSettingStmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
 
@@ -488,7 +519,10 @@ function checkManagerPassword(password) {
   if (typeof password !== 'string') return false;
   const stored = getSettingStmt.get('manager_password_hash');
   if (stored && stored.value) return verifyHashedPassword(password, stored.value);
-  return password === MANAGER_PASSWORD; // pas encore change depuis l'interface
+  if (!MANAGER_PASSWORD) return false;
+  const a = crypto.createHash('sha256').update(password).digest();
+  const b = crypto.createHash('sha256').update(MANAGER_PASSWORD).digest();
+  return crypto.timingSafeEqual(a, b); // pas encore change depuis l'interface
 }
 
 // Limitation des tentatives par IP (login ET changement de mot de passe,
@@ -528,6 +562,19 @@ app.get('/api/auth/gateway', (req, res) => {
   res.json({ ok: true });
 });
 
+// Premier demarrage sans MANAGER_PASSWORD ni mot de passe enregistre : on en genere un, affiche UNE fois dans la console
+// (comme Phoenix Quest), au lieu de la valeur par defaut « quiz2024 » qui etait publique. Derriere la passerelle,
+// l'animateur n'en a pas besoin (droit admin) ; en autonome, le noter puis le changer depuis l'ecran gestionnaire.
+if (!MANAGER_PASSWORD && !getSettingStmt.get('manager_password_hash')) {
+  const generated = crypto.randomBytes(9).toString('base64url');
+  setSettingStmt.run('manager_password_hash', hashPassword(generated));
+  console.log('========================================================');
+  console.log(' Aucun mot de passe gestionnaire defini : mot de passe genere :');
+  console.log(' ' + generated);
+  console.log(' (a changer depuis l\'ecran gestionnaire, ou definir MANAGER_PASSWORD)');
+  console.log('========================================================');
+}
+
 app.post('/api/login', (req, res) => {
   if (isLoginLocked(req.ip)) {
     return res.status(429).json({ ok: false, error: 'locked', retryAfterSeconds: lockoutSecondsLeft(req.ip) });
@@ -549,7 +596,7 @@ app.post('/api/change-password', (req, res) => {
     return res.status(429).json({ ok: false, error: 'locked', retryAfterSeconds: lockoutSecondsLeft(req.ip) });
   }
   const { currentPassword, newPassword } = req.body || {};
-  if (typeof newPassword !== 'string' || newPassword.length < 4) {
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
     return res.status(400).json({ ok: false, error: 'weak_password' });
   }
   if (!checkManagerPassword(currentPassword)) {
@@ -1057,8 +1104,20 @@ function broadcastState() {
   }
 }
 
+// Evenements Socket.IO que les joueurs (telephones) et le projecteur ont le droit d'emettre : tout le reste est du
+// pilotage de la partie, reserve a l'animateur. Derriere la passerelle, la poignee de main porte le cookie de session
+// de la passerelle, que identify(req) (fourni par attachToServer) transforme en { user, role }.
+const SOCKET_PUBLIC_EVENTS = new Set(['register-role', 'create-team', 'buzz', 'cast-vote', 'submit-answer', 'disconnect']);
+let gatewayIdentify = null;
+
 function registerSocketHandlers() {
 io.on('connection', (socket) => {
+  const isManager = !gatewayIdentify || ((gatewayIdentify(socket.request) || {}).role === 'admin');
+  socket.use(([event], next) => {
+    if (isManager || SOCKET_PUBLIC_EVENTS.has(event)) return next();
+    socket.emit('unauthorized', { event }); // le gestionnaire doit etre connecte a la passerelle avec le droit admin
+    next(new Error('unauthorized'));
+  });
   socket.emit('state', currentState());
 
   // Envoye par chaque ecran a la connexion pour s'identifier ('control', 'display' ou 'phone').
@@ -1575,12 +1634,14 @@ function persistFinishedSession() {
 //   Socket.IO ecoute alors sur /quiz/socket.io. Voir README.md ("Passerelle").
 function createIo(httpServer, mountPath) {
   const prefix = String(mountPath || '').replace(/\/+$/, '');
-  io = new Server(httpServer, { cors: { origin: '*' }, path: prefix + '/socket.io' });
+  // Derriere la passerelle : meme origine, donc aucun CORS (un site tiers ne peut pas ouvrir de socket vers ce serveur).
+  io = new Server(httpServer, { cors: { origin: gatewayIdentify ? false : '*' }, path: prefix + '/socket.io' });
   registerSocketHandlers();
 }
 
 app.attachToServer = (httpServer, options) => {
   if (io) return; // deja attache
+  if (options && typeof options.identify === 'function') gatewayIdentify = options.identify;
   createIo(httpServer, options && options.mountPath);
 };
 module.exports = app;
